@@ -7,11 +7,14 @@ end)
 function MainScene.create()
     local scene = MainScene.new()
     scene:addChild(scene:createBackgroundLayer())
-    scene:addChild(scene:createAnimationLayer())
+--    scene:addChild(scene:createAnimationLayer())
+    local AnimationLayer = require("AnimationLayer")
+    local layer = AnimationLayer.create()
+    scene:addChild(layer)
     return scene
 end
 
--- overwrite ctor() for new()
+-- overwrite the ctor() in new(), used to create fields
 function MainScene:ctor()
     self.visibleSize = cc.Director:getInstance():getVisibleSize()
     self.origin = cc.Director:getInstance():getVisibleOrigin()
@@ -27,13 +30,13 @@ function MainScene:createBackgroundLayer()
     return layer
 end
 
-function MainScene:createAnimationLayer()
-    local leadingRole = cc.Sprite:create("roles/leading_role.png")
-    leadingRole:setPosition(self.visibleSize.height/2 ,self.visibleSize.width/5)
-    local animationLayer = cc.Layer:create()
-    animationLayer:addChild(leadingRole)
-    return animationLayer
-end
+--function MainScene:createAnimationLayer()
+--    local leadingRole = cc.Sprite:create("roles/leading_role.png")
+--    leadingRole:setPosition(self.visibleSize.height/2 ,self.visibleSize.width/5)
+--    local animationLayer = cc.Layer:create()
+--    animationLayer:addChild(leadingRole)
+--    return animationLayer
+--end
 
 return MainScene
 
