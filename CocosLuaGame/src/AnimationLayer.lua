@@ -1,3 +1,5 @@
+
+require("Helper")
 --create class AnimationLayer
 local AnimationLayer = class("AnimationLayer", function()
 	return cc.Layer:create()
@@ -5,6 +7,12 @@ end)
 
 local TAG_FOWARD_ACTION = 1
 local TAG_BACKWARD_ACTION = 2
+local KEY_W = cc.KeyCode.KEY_W
+local KEY_D = cc.KeyCode.KEY_D
+local KEY_S = cc.KeyCode.KEY_S
+local KEY_A = cc.KeyCode.KEY_A
+local KEY_J = cc.KeyCode.KEY_J
+local KEY_K = cc.KeyCode.KEY_K
 
 -- static method.return instance of MainScene, conformed with C++ form
 function AnimationLayer.create()
@@ -42,7 +50,7 @@ function AnimationLayer:onEnter()
     end
     -- -1 means infinite loop
     local animation1 = cc.Animation:createWithSpriteFrames(forwardFrames, 0.15, -1)
-    animCache:addAnimation(animation1,"foward_walk")    
+    animCache:addAnimation(animation1,"foward_walk") 
     
     -- cache sprite frame
     local frameCache = cc.SpriteFrameCache:getInstance()
@@ -63,10 +71,12 @@ function AnimationLayer:onEnter()
     local function onKeyPressed(keyCode, event)
         local targetSprite = event:getCurrentTarget()
         local pressedKey = self.pressedDirectionKey
+        print(self.directionKeyNum)
         if pressedKey[keyCode] ~= nil then
+            pressedKey[keyCode] = true 
             self.directionKeyNum = self.directionKeyNum + 1
         end
-        if keyCode == cc.KeyCode.KEY_D then -- foward move
+        if keyCode == KEY_D then -- foward move
             targetSprite:setFlippedX(false)
             local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
@@ -74,8 +84,7 @@ function AnimationLayer:onEnter()
             local forward = cc.Spawn:create(walkAction, moveBy)
             forward:setTag(TAG_FOWARD_ACTION)
             targetSprite:runAction(forward)
-            pressedKey[keyCode] = true
-        elseif keyCode == cc.KeyCode.KEY_A then -- backward move
+        elseif keyCode == KEY_A then -- backward move
             targetSprite:setFlippedX(true)
             local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
@@ -83,51 +92,98 @@ function AnimationLayer:onEnter()
             local backward = cc.Spawn:create(walkAction, moveBy)
             backward:setTag(TAG_BACKWARD_ACTION)
             targetSprite:runAction(backward)
-            pressedKey[keyCode] = true
-        elseif keyCode == cc.KeyCode.KEY_J then -- jump
-            if pressedKey[cc.KeyCode.KEY_D] and pressedKey[cc.KeyCode.KEY_A] then
+        elseif keyCode == KEY_J then -- jump
+            if pressedKey[KEY_D] and pressedKey[KEY_A] then
                 targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), 80, 1))	
-            elseif pressedKey[cc.KeyCode.KEY_D] then
+            elseif pressedKey[KEY_D] then
                 targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(30, 0), 80, 1))
-            elseif pressedKey[cc.KeyCode.KEY_A] then
+            elseif pressedKey[KEY_A] then
                 targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(-30, 0), 80, 1))
             else
                 targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), 80, 1))
             end
-        elseif keyCode == cc.KeyCode.KEY_K then -- attack
+        elseif keyCode == KEY_K then -- attack
             local attack = cc.Sprite:createWithSpriteFrame(
-                cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
+                           cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
             local lead_x, lead_y = targetSprite:getPosition()
             local leadSize = targetSprite:getContentSize()
-            local attactPosi = cc.p(0, 0)
+            local attackPosi = cc.p(0, 0)
             local moveBy = nil
-            if targetSprite:isFlippedX() then
-            else
-                attactPosi.x = lead_x + leadSize.width/2 + attack:getContentSize().width/2
-                attactPosi.y = lead_y
-            moveBy = cc.MoveBy:create(2, cc.p(self.visibleSize.width, 0))       
+            local function forwardAndBackwardAttack()
+                if targetSprite:isFlippedX() then
+                    attack:setFlippedX(true)
+                    attackPosi.x = lead_x - leadSize.width/2 - attack:getContentSize().width/2
+                    attackPosi.y = lead_y
+                    moveBy = cc.MoveBy:create(2, cc.p(-self.visibleSize.width, 0))
+                else
+                    attack:setFlippedX(false)
+                    attackPosi.x = lead_x + leadSize.width/2 + attack:getContentSize().width/2
+                    attackPosi.y = lead_y
+                    moveBy = cc.MoveBy:create(2, cc.p(self.visibleSize.width, 0))       
+                end                
             end
-            attack:runAction(moveBy)
-            attack:setPosition(attactPosi)
+            
+            if self.directionKeyNum == 1 then
+                if pressedKey[KEY_W] then -- up
+--                    attack:setFlippedX(false)
+                    attack:setRotation(-90)
+                    attackPosi.x = lead_x
+                    attackPosi.y = lead_y + leadSize.height/2 + attack:getContentSize().height/2
+                    moveBy = cc.MoveBy:create(2, cc.p(0, self.visibleSize.height))
+                elseif pressedKey[KEY_S] then --down
+                    attack:setRotation(90)
+                    attackPosi.x = lead_x
+                    attackPosi.y = lead_y - leadSize.height/2 - attack:getContentSize().height/2
+                    moveBy = cc.MoveBy:create(2, cc.p(0, -self.visibleSize.height))
+                else
+                    forwardAndBackwardAttack()
+                end        
+            elseif self.directionKeyNum == 2 then
+                local maxLenght =  math.max(self.visibleSize.width, self.visibleSize.height)
+                if pressedKey[KEY_W] and pressedKey[KEY_D] then -- up right
+                    attack:setRotation(-45)
+                    attackPosi.x = lead_x + leadSize.width/2 + 
+                                   math.cos(45)*attack:getContentSize().width/2
+                    attackPosi.y = lead_y + leadSize.height/2 +
+                                   math.sin(45)*attack:getContentSize().width/2
+                    
+                    moveBy = cc.MoveBy:create(2, cc.p(maxLenght, maxLenght))
+                elseif pressedKey[KEY_D] and pressedKey[KEY_S] then -- down right 
+                    attack:setRotation(45)
+                    attackPosi.x = lead_x + leadSize.width/2 + 
+                                   math.cos(45)*attack:getContentSize().width/2
+                    attackPosi.y = lead_y - leadSize.height/2 -
+                                   math.sin(45)*attack:getContentSize().width/2
+                    moveBy = cc.MoveBy:create(2, cc.p(maxLenght, -maxLenght))
+                elseif pressedKey[KEY_A] and pressedKey[KEY_S] then -- down left
+                    attack:setRotation(135)
+                    attackPosi.x = lead_x - leadSize.width/2 - 
+                                   math.cos(45)*attack:getContentSize().width/2
+                    attackPosi.y = lead_y - leadSize.height/2 -
+                                   math.sin(45)*attack:getContentSize().width/2
+                    moveBy = cc.MoveBy:create(2, cc.p(-maxLenght, -maxLenght))
+                elseif pressedKey[KEY_A] and pressedKey[KEY_W] then -- up left
+                    attack:setRotation(-135)
+                    attackPosi.x = lead_x - leadSize.width/2 - 
+                                   math.cos(45)*attack:getContentSize().width/2 
+                    attackPosi.y = lead_y + leadSize.height/2 +
+                                   math.sin(45)*attack:getContentSize().width/2
+                    moveBy = cc.MoveBy:create(2, cc.p(-maxLenght, maxLenght))
+                else
+                    forwardAndBackwardAttack()                 
+                end
+            else
+                forwardAndBackwardAttack()     
+            end
+
+            local function cleanupAttack()
+                self:removeChild(attack, true)
+            end
+            local callfunc = cc.CallFunc:create(cleanupAttack)
+            attack:runAction(cc.Sequence:create(moveBy, callfunc))
+            attack:setPosition(attackPosi)
             self:addChild(attack)
---            if self.directionKeyNum == 1 then
---                if pressedKey[cc.KeyCode.KEY_D] then -- forward
---                    targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(20, 0), 80, 1))
---                elseif pressedKey[cc.KeyCode.KEY_A] then --backward
---                    targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(-20, 0), 80, 1))
---                else
---                    targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), 80, 1))             
---                end
---            elseif self.directionKeyNum == 2 then
---                if pressedKey[cc.KeyCode.KEY_W] and pressedKey[cc.KeyCode.KEY_D] then
---                elseif pressedKey[cc.KeyCode.KEY_D] and pressedKey[cc.KeyCode.KEY_S] then
---                elseif pressedKey[cc.KeyCode.KEY_S] and pressedKey[cc.KeyCode.KEY_A] then
---                elseif pressedKey[cc.KeyCode.KEY_A] and pressedKey[cc.KeyCode.KEY_W] then
---                else
---                end
---            else
---    
---            end
+            cclog("Aniamtion layer child nums: %d", self:getChildrenCount())
         end
     end
     
