@@ -29,28 +29,34 @@ function AnimationLayer:ctor()
 end
 
 function AnimationLayer:onEnter()
---    local leadingRole = cc.Sprite:create("roles/leading_role.png")
---    local cache = cc.SpriteFrameCache:getInstance()
+
     local offsetUnit = 80
     local cache = cc.Director:getInstance():getTextureCache()
---    local leadingTexture = cache:addImage("roles/leading_role_atlas.png")
---    cc.Image:initWithImageFile("roles/leading_role_atlas.png")
---    cc.Image:
     local leading_altas = cc.Sprite:create("roles/leading_role_atlas.png"):getTexture()
---    local cache = cc.SpriteFrameCache:getInstance()
+    -- cache animation
     local animCache = cc.AnimationCache:getInstance()
     local forwardFrames = {}
     for i = 1, 4 do
         forwardFrames[i] = cc.SpriteFrame:createWithTexture(leading_altas, 
             cc.rect((i-1)*offsetUnit, 1*offsetUnit, offsetUnit, offsetUnit))
     end
-    local animation = cc.Animation:createWithSpriteFrames(forwardFrames, 0.3, 100) --FIXME loop num??
-    animCache:addAnimation(animation,"foward_walk")
-  
-    local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])
---    local animation = cc.Animation:createWithSpriteFrames(forwardFrames, 0.3)
---    local walkAction = cc.RepeatForever:create(cc.Animate:create(animation))
---    leadingRole:runAction(walkAction)
+    -- -1 means infinite loop
+    local animation1 = cc.Animation:createWithSpriteFrames(forwardFrames, 0.15, -1)
+    animCache:addAnimation(animation1,"foward_walk")    
+    local backwardFrames = {}
+    for i = 1, 4 do
+        backwardFrames[i] = cc.SpriteFrame:createWithTexture(leading_altas, 
+            cc.rect((i-1)*offsetUnit, 3*offsetUnit, offsetUnit, offsetUnit))
+    end
+    local animation2 = cc.Animation:createWithSpriteFrames(backwardFrames, 0.15, -1)
+    animCache:addAnimation(animation2,"backward_walk")
+    
+    -- cache sprite frame
+    local frameCache = cc.SpriteFrameCache:getInstance()
+    frameCache:addSpriteFrame(forwardFrames[1],"foward")
+    frameCache:addSpriteFrame(backwardFrames[1],"backward")
+    
+    local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])  
 --    local leadingRole = cc.Sprite:create("roles/leading_role_atlas.png", 
 --                        cc.rect(0, 1*offsetUnit, offsetUnit, offsetUnit))
     leadingRole:setPosition(self.visibleSize.height/2 ,self.visibleSize.width/5)
@@ -63,20 +69,23 @@ function AnimationLayer:onEnter()
         if pressedKey[keyCode] ~= nil then
             self.directionKeyNum = self.directionKeyNum + 1
         end
-        if keyCode == cc.KeyCode.KEY_D then
+        if keyCode == cc.KeyCode.KEY_D then -- foward move
+--            targetSprite:setFlippedX(false)
+            targetSprite:setSpriteFrame(cc.SpriteFrameCache:getInstance():getSpriteFrame("foward"))
             local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
---            local rotate = cc.RotateBy:create( 2, 720)
---            targetSprite:runAction(rotate)
---            local walkAction = cc.Animate:create(animation)
---            targetSprite:runAction(walkAction)
             local moveBy = cc.MoveBy:create(5, cc.p(self.visibleSize.width, 0))
             local forward = cc.Spawn:create(walkAction, moveBy)
             forward:setTag(TAG_FOWARD_ACTION)
             targetSprite:runAction(forward)
             pressedKey[keyCode] = true
-        elseif keyCode == cc.KeyCode.KEY_A then
-            local backward = cc.MoveBy:create(5, cc.p(-self.visibleSize.width, 0))
+        elseif keyCode == cc.KeyCode.KEY_A then -- backward move
+            targetSprite:setSpriteFrame(cc.SpriteFrameCache:getInstance():getSpriteFrame("backward"))
+--            targetSprite:setFlippedX(true)
+            local animation = cc.AnimationCache:getInstance():getAnimation("backward_walk")
+            local walkAction = cc.Animate:create(animation)
+            local moveBy = cc.MoveBy:create(5, cc.p(-self.visibleSize.width, 0))
+            local backward = cc.Spawn:create(walkAction, moveBy)
             backward:setTag(TAG_BACKWARD_ACTION)
             targetSprite:runAction(backward)
             pressedKey[keyCode] = true
