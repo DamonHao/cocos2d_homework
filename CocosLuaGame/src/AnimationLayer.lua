@@ -43,22 +43,19 @@ function AnimationLayer:onEnter()
     -- -1 means infinite loop
     local animation1 = cc.Animation:createWithSpriteFrames(forwardFrames, 0.15, -1)
     animCache:addAnimation(animation1,"foward_walk")    
-    local backwardFrames = {}
-    for i = 1, 4 do
-        backwardFrames[i] = cc.SpriteFrame:createWithTexture(leading_altas, 
-            cc.rect((i-1)*offsetUnit, 3*offsetUnit, offsetUnit, offsetUnit))
-    end
-    local animation2 = cc.Animation:createWithSpriteFrames(backwardFrames, 0.15, -1)
-    animCache:addAnimation(animation2,"backward_walk")
     
     -- cache sprite frame
     local frameCache = cc.SpriteFrameCache:getInstance()
     frameCache:addSpriteFrame(forwardFrames[1],"foward")
-    frameCache:addSpriteFrame(backwardFrames[1],"backward")
+--    frameCache:addSpriteFrame(cc.SpriteFrame:create("attacks/leading_role_attack.png"),
+--               "leading_role_attack")
+    frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
+        "leading_role_attack")
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])  
---    local leadingRole = cc.Sprite:create("roles/leading_role_atlas.png", 
---                        cc.rect(0, 1*offsetUnit, offsetUnit, offsetUnit))
+--    leadingRole
+--    local haha = leadingRole:getPosition()
+--    print(type(haha))
     leadingRole:setPosition(self.visibleSize.height/2 ,self.visibleSize.width/5)
     self:addChild(leadingRole)
     
@@ -70,8 +67,7 @@ function AnimationLayer:onEnter()
             self.directionKeyNum = self.directionKeyNum + 1
         end
         if keyCode == cc.KeyCode.KEY_D then -- foward move
---            targetSprite:setFlippedX(false)
-            targetSprite:setSpriteFrame(cc.SpriteFrameCache:getInstance():getSpriteFrame("foward"))
+            targetSprite:setFlippedX(false)
             local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
             local moveBy = cc.MoveBy:create(5, cc.p(self.visibleSize.width, 0))
@@ -80,9 +76,8 @@ function AnimationLayer:onEnter()
             targetSprite:runAction(forward)
             pressedKey[keyCode] = true
         elseif keyCode == cc.KeyCode.KEY_A then -- backward move
-            targetSprite:setSpriteFrame(cc.SpriteFrameCache:getInstance():getSpriteFrame("backward"))
---            targetSprite:setFlippedX(true)
-            local animation = cc.AnimationCache:getInstance():getAnimation("backward_walk")
+            targetSprite:setFlippedX(true)
+            local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
             local moveBy = cc.MoveBy:create(5, cc.p(-self.visibleSize.width, 0))
             local backward = cc.Spawn:create(walkAction, moveBy)
@@ -100,6 +95,21 @@ function AnimationLayer:onEnter()
                 targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), 80, 1))
             end
         elseif keyCode == cc.KeyCode.KEY_K then -- attack
+            local attack = cc.Sprite:createWithSpriteFrame(
+                cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
+            local lead_x, lead_y = targetSprite:getPosition()
+            local leadSize = targetSprite:getContentSize()
+            local attactPosi = cc.p(0, 0)
+            local moveBy = nil
+            if targetSprite:isFlippedX() then
+            else
+                attactPosi.x = lead_x + leadSize.width/2 + attack:getContentSize().width/2
+                attactPosi.y = lead_y
+            moveBy = cc.MoveBy:create(2, cc.p(self.visibleSize.width, 0))       
+            end
+            attack:runAction(moveBy)
+            attack:setPosition(attactPosi)
+            self:addChild(attack)
 --            if self.directionKeyNum == 1 then
 --                if pressedKey[cc.KeyCode.KEY_D] then -- forward
 --                    targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(20, 0), 80, 1))
