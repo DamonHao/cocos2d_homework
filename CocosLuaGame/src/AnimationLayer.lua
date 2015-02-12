@@ -7,12 +7,16 @@ end)
 
 local TAG_FOWARD_ACTION = 1
 local TAG_BACKWARD_ACTION = 2
+local TAG_MAP = 3
 local KEY_W = cc.KeyCode.KEY_W
 local KEY_D = cc.KeyCode.KEY_D
 local KEY_S = cc.KeyCode.KEY_S
 local KEY_A = cc.KeyCode.KEY_A
 local KEY_J = cc.KeyCode.KEY_J
 local KEY_K = cc.KeyCode.KEY_K
+local JUMP_HEIGHT = 120
+
+
 
 -- static method.return instance of MainScene, conformed with C++ form
 function AnimationLayer.create()
@@ -37,7 +41,24 @@ function AnimationLayer:ctor()
 end
 
 function AnimationLayer:onEnter()
-
+    -- Physics debug mode
+    cc.Director:getInstance():getRunningScene():getPhysicsWorld():
+        setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
+    -- create world edge
+    local nodeForWorldEdge = cc.Node:create()
+    nodeForWorldEdge:setPhysicsBody(cc.PhysicsBody:createEdgeBox(cc.size(self.visibleSize.width, self.visibleSize.height)))
+    nodeForWorldEdge:setPosition(self.visibleSize.width/2, self.visibleSize.height/2)
+    nodeForWorldEdge:getPhysicsBody():setDynamic(false)
+--    nodeForWorldEdge:getPhysicsBody():setCollisionBitmask(0x1)
+    self:addChild(nodeForWorldEdge)
+    
+--    local stone = cc.Sprite:create("maps/stone.png")
+--    stone:setPosition(self.visibleSize.width/2, 100)
+--    stone:setPhysicsBody(cc.PhysicsBody:createBox(stone:getContentSize()))
+--    stone:getPhysicsBody():setDynamic(false)
+--    stone:getPhysicsBody():setTag(TAG_MAP)
+--    self:addChild(stone)   
+    
     local offsetUnit = 80
     local cache = cc.Director:getInstance():getTextureCache()
     local leading_altas = cc.Sprite:create("roles/leading_role_atlas.png"):getTexture()
@@ -61,17 +82,29 @@ function AnimationLayer:onEnter()
         "leading_role_attack")
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])  
---    leadingRole
---    local haha = leadingRole:getPosition()
---    print(type(haha))
-    leadingRole:setPosition(self.visibleSize.height/2 ,self.visibleSize.width/5)
+--    leadingRole:setAnchorPoint(0, 0)
+--    leadingRole:setPosition(0 , 0)
+    leadingRole:setPosition(self.visibleSize.width/5, self.visibleSize.height/2)
+    leadingRole:setPhysicsBody(cc.PhysicsBody:createBox(leadingRole:getContentSize()))
+    leadingRole:getPhysicsBody():setCategoryBitmask(1)
+--    leadingRole:getPhysicsBody():setContactTestBitmask(1)
+    leadingRole:getPhysicsBody():setCollisionBitmask(1)
     self:addChild(leadingRole)
+    
+    local testSprite = cc.Sprite:createWithSpriteFrame(forwardFrames[1]) 
+    testSprite:setFlippedX(true)
+    testSprite:setPosition(self.visibleSize.width*3/5, self.visibleSize.height/2)
+    testSprite:setPhysicsBody(cc.PhysicsBody:createBox(cc.size( offsetUnit , offsetUnit)))
+--    testSprite:getPhysicsBody():setContactTestBitmask(1)
+    testSprite:getPhysicsBody():setCategoryBitmask(1)
+    testSprite:getPhysicsBody():setCollisionBitmask(2)
+    self:addChild(testSprite)
     
     -- keyboard event
     local function onKeyPressed(keyCode, event)
         local targetSprite = event:getCurrentTarget()
         local pressedKey = self.pressedDirectionKey
-        print(self.directionKeyNum)
+--        print(self.directionKeyNum)
         if pressedKey[keyCode] ~= nil then
             pressedKey[keyCode] = true 
             self.directionKeyNum = self.directionKeyNum + 1
@@ -94,17 +127,22 @@ function AnimationLayer:onEnter()
             targetSprite:runAction(backward)
         elseif keyCode == KEY_J then -- jump
             if pressedKey[KEY_D] and pressedKey[KEY_A] then
-                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), 80, 1))	
+                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1))	
             elseif pressedKey[KEY_D] then
-                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(30, 0), 80, 1))
+                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(80, 0), JUMP_HEIGHT, 1))
             elseif pressedKey[KEY_A] then
-                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(-30, 0), 80, 1))
+                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(-80, 0), JUMP_HEIGHT, 1))
             else
-                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), 80, 1))
+                targetSprite:runAction(cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1))
             end
         elseif keyCode == KEY_K then -- attack
             local attack = cc.Sprite:createWithSpriteFrame(
                            cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
+            attack:setPhysicsBody(cc.PhysicsBody:createBox(
+                   cc.size(attack:getContentSize().width , attack:getContentSize().height)))
+            attack:getPhysicsBody():setGravityEnable(false)
+--            print(attack:getPhysicsBody():getMass())
+
             local lead_x, lead_y = targetSprite:getPosition()
             local leadSize = targetSprite:getContentSize()
             local attackPosi = cc.p(0, 0)
@@ -201,11 +239,28 @@ function AnimationLayer:onEnter()
         end
     end
 
-    local listener = cc.EventListenerKeyboard:create()
-    listener:registerScriptHandler(onKeyPressed, cc.Handler.EVENT_KEYBOARD_PRESSED)
-    listener:registerScriptHandler(onKeyReleased, cc.Handler.EVENT_KEYBOARD_RELEASED)
+    local keyboardListener = cc.EventListenerKeyboard:create()
+    keyboardListener:registerScriptHandler(onKeyPressed, cc.Handler.EVENT_KEYBOARD_PRESSED)
+    keyboardListener:registerScriptHandler(onKeyReleased, cc.Handler.EVENT_KEYBOARD_RELEASED)
     local eventDispatcher = self:getEventDispatcher() -- every node has a event dispatcher
-    eventDispatcher:addEventListenerWithSceneGraphPriority(listener, leadingRole)
+    eventDispatcher:addEventListenerWithSceneGraphPriority(keyboardListener, leadingRole)
+    
+    -- contact event
+    local function onContactBegin(contact)
+        local a = contact:getShapeA():getBody()
+        local b = contact:getShapeB():getBody()
+        print("contact") 
+--        if a:getTag() == TAG_MAP or b:getTag() == TAG_MAP then
+--            print("contact")    
+--        end
+    	return true
+    end
+    
+    local contactListener = cc.EventListenerPhysicsContact:create()
+--    local contactListener = cc.EventListenerPhysicsContactWithBodies:create(leadingRole:getPhysicsBody(), 
+--                            testSprite:getPhysicsBody())
+    contactListener:registerScriptHandler(onContactBegin, cc.Handler.EVENT_PHYSICS_CONTACT_BEGIN)
+    eventDispatcher:addEventListenerWithSceneGraphPriority(contactListener, self)
     
 end
 

@@ -1,6 +1,7 @@
 -- create class MainScene
 local MainScene = class("MainScene",function()
-    return cc.Scene:create()
+--    return cc.Scene:create()
+    return cc.Scene:createWithPhysics()
 end)
 
 -- return instance of MainScene, conformed with C++ form
