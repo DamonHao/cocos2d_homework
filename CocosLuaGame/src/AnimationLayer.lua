@@ -19,7 +19,7 @@ local KEY_S = cc.KeyCode.KEY_S
 local KEY_A = cc.KeyCode.KEY_A
 local KEY_J = cc.KeyCode.KEY_J
 local KEY_K = cc.KeyCode.KEY_K
-local JUMP_HEIGHT = 180
+local JUMP_HEIGHT = 150
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
 
 
@@ -51,6 +51,7 @@ function AnimationLayer:onEnter()
     -- Physics debug mode
     cc.Director:getInstance():getRunningScene():getPhysicsWorld():
         setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
+--    print(cc.Director:getInstance():getRunningScene():getPhysicsWorld():getGravity().y)
     -- create world edge
     local nodeForWorldEdge = cc.Node:create()
     nodeForWorldEdge:setPhysicsBody(cc.PhysicsBody:createEdgeBox(cc.size(self.visibleSize.width, self.visibleSize.height)))
@@ -127,16 +128,18 @@ function AnimationLayer:onEnter()
             pressedKey[keyCode] = true 
             self.directionKeyNum = self.directionKeyNum + 1
         end
-        if keyCode == KEY_D and self.isLeadingRoleOnTheGround then -- foward move
+        if keyCode == KEY_D then -- foward move
             targetSprite:setFlippedX(false)
+            if self.isLeadingRoleOnTheGround == false then return end
             local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
             local moveBy = cc.MoveBy:create(5, cc.p(self.visibleSize.width, 0))
             local forward = cc.Spawn:create(walkAction, moveBy)
             forward:setTag(TAG_FORWARD_ACTION)
             targetSprite:runAction(forward)
-        elseif keyCode == KEY_A and self.isLeadingRoleOnTheGround then -- backward move
+        elseif keyCode == KEY_A then -- backward move
             targetSprite:setFlippedX(true)
+            if self.isLeadingRoleOnTheGround == false then return end
             local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
             local walkAction = cc.Animate:create(animation)
             local moveBy = cc.MoveBy:create(5, cc.p(-self.visibleSize.width, 0))
@@ -144,6 +147,7 @@ function AnimationLayer:onEnter()
             backward:setTag(TAG_BACKWARD_ACTION)
             targetSprite:runAction(backward)
         elseif keyCode == KEY_J and self.isLeadingRoleOnTheGround then -- jump
+            targetSprite:stopAllActions()
             if pressedKey[KEY_D] and pressedKey[KEY_A] then
                 local jump = cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1)
                 jump:setTag(TAG_JUMP_ACTION)
@@ -290,7 +294,8 @@ function AnimationLayer:onEnter()
             if dynamicSprite:getTag() == TAG_LEADING_ROLE then
                 local contactNormal = contact:getContactData().normal
                 local velocity = dynamicSprite:getPhysicsBody():getVelocity()
-                cclog("velocity before contact %f, %f", velocity.x, velocity.y)
+                cclog("velocity before contact x, y:  %f, %f", velocity.x, velocity.y)
+                cclog("onContactBegin original normal x, y:  %f, %f", contactNormal.x, contactNormal.y)
                 if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then
                     if isSwapped then -- set the normal emit from map
                         contactNormal.y = -1 * contactNormal.y 
@@ -302,14 +307,14 @@ function AnimationLayer:onEnter()
                     dynamicSprite:stopActionByTag(TAG_JUMP_FORWARD_ACTION)
                     dynamicSprite:stopActionByTag(TAG_JUMP_BACKWARD_ACTION)
                     dynamicSprite:stopActionByTag(TAG_JUMP_ACTION)
-                    dynamicSprite:getPhysicsBody():setVelocity(cc.p(velocity.x, 0))
+                    dynamicSprite:getPhysicsBody():setVelocity(cc.p(velocity.x, -0.2*velocity.y))
                 else
-                    dynamicSprite:getPhysicsBody():setVelocity(cc.p(0, velocity.y))
+                    dynamicSprite:getPhysicsBody():setVelocity(cc.p( -0.3*velocity.x, velocity.y))
                     dynamicSprite:stopActionByTag(TAG_JUMP_FORWARD_ACTION)
                     dynamicSprite:stopActionByTag(TAG_JUMP_BACKWARD_ACTION)
                 end
                 velocity = dynamicSprite:getPhysicsBody():getVelocity()
-                cclog("velocity after contact %f, %f", velocity.x, velocity.y)
+                cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
                 
             end
 --            print("touch")
@@ -335,6 +340,7 @@ function AnimationLayer:onEnter()
             end
             if dynamicSprite:getTag() == TAG_LEADING_ROLE then
                 local contactNormal = contact:getContactData().normal
+                cclog("onContactEnd original normal x, y: %f, %f", contactNormal.x, contactNormal.y)
                 if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then
                     if isSwapped then -- set the normal emit from map
                         contactNormal.y = -1 * contactNormal.y 
