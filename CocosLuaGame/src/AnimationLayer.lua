@@ -12,6 +12,8 @@ local TAG_JUMP_BACKWARD_ACTION = 4
 local TAG_JUMP_ACTION = 5
 local TAG_MAP = 103
 local TAG_LEADING_ROLE = 104
+local TAG_LEADING_ROLE_ATTACK = 105
+local TAG_BOSS = 106
 
 local KEY_W = cc.KeyCode.KEY_W
 local KEY_D = cc.KeyCode.KEY_D
@@ -73,6 +75,7 @@ function AnimationLayer:onEnter()
     cclog("stonde contact test:%d", stone:getPhysicsBody():getContactTestBitmask())
     self:addChild(stone)   
     
+    --set up leadingRole
     local offsetUnit = 80
     local cache = cc.Director:getInstance():getTextureCache()
     local leading_altas = cc.Sprite:create("roles/leading_role_atlas.png"):getTexture()
@@ -85,11 +88,11 @@ function AnimationLayer:onEnter()
     end
     -- -1 means infinite loop
     local animation1 = cc.Animation:createWithSpriteFrames(forwardFrames, 0.15, -1)
-    animCache:addAnimation(animation1,"foward_walk") 
+    animCache:addAnimation(animation1,"leadingRole_forward_walk") 
     
     -- cache sprite frame
     local frameCache = cc.SpriteFrameCache:getInstance()
-    frameCache:addSpriteFrame(forwardFrames[1],"foward")
+--    frameCache:addSpriteFrame(forwardFrames[1],"foward")
 --    frameCache:addSpriteFrame(cc.SpriteFrame:create("attacks/leading_role_attack.png"),
 --               "leading_role_attack")
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
@@ -110,14 +113,27 @@ function AnimationLayer:onEnter()
     cclog("leadingRole contact test", leadingRole:getPhysicsBody():getContactTestBitmask())
     self:addChild(leadingRole)
     
-    local testSprite = cc.Sprite:createWithSpriteFrame(forwardFrames[1]) 
-    testSprite:setFlippedX(true)
-    testSprite:setPosition(self.visibleSize.width*3/5, self.visibleSize.height/2)
-    testSprite:setPhysicsBody(cc.PhysicsBody:createBox(cc.size( offsetUnit , offsetUnit)))
---    testSprite:getPhysicsBody():setContactTestBitmask(1)
-    testSprite:getPhysicsBody():setCategoryBitmask(1)
-    testSprite:getPhysicsBody():setCollisionBitmask(1)
---    self:addChild(testSprite)
+    -- set up boss 
+    local boss_altas = cc.Sprite:create("roles/boss_atlas.png"):getTexture()
+    local bossForwardFrames = {}
+    for i = 1, 4 do
+        bossForwardFrames[i] = cc.SpriteFrame:createWithTexture(boss_altas, 
+            cc.rect((i-1)*55, 77, 55, 77))
+    end
+    local animation2 = cc.Animation:createWithSpriteFrames(bossForwardFrames, 0.15, -1)
+    animCache:addAnimation(animation2,"boss_forward_walk")
+    local boss = cc.Sprite:createWithSpriteFrame(bossForwardFrames[1])
+--    boss:setFlippedX(true)
+    boss:setPosition(self.visibleSize.width*4/5, self.visibleSize.height/2)
+    boss:setTag(TAG_BOSS)
+    boss:setPhysicsBody(cc.PhysicsBody:createBox(boss:getContentSize()))
+    boss:getPhysicsBody():setCategoryBitmask(2)
+    boss:getPhysicsBody():setContactTestBitmask(4)
+    boss:getPhysicsBody():setCollisionBitmask(4)
+    self:addChild(boss)
+    
+    -- Simple AI
+    
     
     -- keyboard event
     local function onKeyPressed(keyCode, event)
@@ -131,7 +147,7 @@ function AnimationLayer:onEnter()
         if keyCode == KEY_D then -- foward move
             targetSprite:setFlippedX(false)
             if self.isLeadingRoleOnTheGround == false then return end
-            local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
+            local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
             local walkAction = cc.Animate:create(animation)
             local moveBy = cc.MoveBy:create(5, cc.p(self.visibleSize.width, 0))
             local forward = cc.Spawn:create(walkAction, moveBy)
@@ -140,7 +156,7 @@ function AnimationLayer:onEnter()
         elseif keyCode == KEY_A then -- backward move
             targetSprite:setFlippedX(true)
             if self.isLeadingRoleOnTheGround == false then return end
-            local animation = cc.AnimationCache:getInstance():getAnimation("foward_walk")
+            local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
             local walkAction = cc.Animate:create(animation)
             local moveBy = cc.MoveBy:create(5, cc.p(-self.visibleSize.width, 0))
             local backward = cc.Spawn:create(walkAction, moveBy)
@@ -171,6 +187,11 @@ function AnimationLayer:onEnter()
             attack:setPhysicsBody(cc.PhysicsBody:createBox(
                    cc.size(attack:getContentSize().width , attack:getContentSize().height)))
             attack:getPhysicsBody():setGravityEnable(false)
+            attack:getPhysicsBody():setCategoryBitmask(4)
+            attack:getPhysicsBody():setContactTestBitmask(2)
+            attack:getPhysicsBody():setCollisionBitmask(2)
+            
+            attack:setTag(TAG_LEADING_ROLE_ATTACK)
 --            print(attack:getPhysicsBody():getMass())
 
             local lead_x, lead_y = targetSprite:getPosition()
@@ -247,11 +268,12 @@ function AnimationLayer:onEnter()
             local function cleanupAttack()
                 self:removeChild(attack, true)
             end
-        local callfunc = cc.CallFunc:create(cleanupAttack)
-        attack:runAction(cc.Sequence:create(moveBy, callfunc))
+--        local callfunc = cc.CallFunc:create(cleanupAttack)
+--        attack:runAction(cc.Sequence:create(moveBy, callfunc))
+        attack:runAction(moveBy)
         attack:setPosition(attackPosi)
-            self:addChild(attack)
-            cclog("Aniamtion layer child nums: %d", self:getChildrenCount())
+        self:addChild(attack)
+        cclog("Aniamtion layer child nums: %d", self:getChildrenCount())
         end
     end
     
@@ -315,10 +337,23 @@ function AnimationLayer:onEnter()
                 end
                 velocity = dynamicSprite:getPhysicsBody():getVelocity()
                 cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
-                
+            elseif dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
+                self:removeChild(dynamicSprite, true)
             end
 --            print("touch")
 --            local contactPoint = contact:getContactData().points
+        elseif a:getTag() == TAG_BOSS or b:getTag() == TAG_BOSS then
+            local boss, dynamicSprite
+            if a:getTag() == TAG_BOSS then
+                boss = a 
+                dynamicSprite = b    
+            else
+                boss = b 
+                dynamicSprite = a
+            end
+            if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
+                self:removeChild(dynamicSprite, true)
+            end
         end
     	return true
     end
@@ -326,6 +361,7 @@ function AnimationLayer:onEnter()
     local function onContactEnd(contact)
         local a = contact:getShapeA():getBody():getNode()
         local b = contact:getShapeB():getBody():getNode()
+        if a == nil or b == nil then return end
         if a:getTag() == TAG_MAP or b:getTag() == TAG_MAP then
             local map, dynamicSprite
             local isSwapped = false
