@@ -22,6 +22,9 @@ local KEY_A = cc.KeyCode.KEY_A
 local KEY_J = cc.KeyCode.KEY_J
 local KEY_K = cc.KeyCode.KEY_K
 local JUMP_HEIGHT = 150
+local GRAVITY_Y = -400
+local JUMP_UP_SPEED = 350
+local WALK_SPEED = 70
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
 
 
@@ -51,9 +54,10 @@ end
 
 function AnimationLayer:onEnter()
     -- Physics debug mode
-    cc.Director:getInstance():getRunningScene():getPhysicsWorld():
-        setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
---    print(cc.Director:getInstance():getRunningScene():getPhysicsWorld():getGravity().y)
+    local physicsWorld = cc.Director:getInstance():getRunningScene():getPhysicsWorld()
+    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
+    physicsWorld:setGravity(cc.p(0, GRAVITY_Y))
+    cclog("world gravity: %f", physicsWorld:getGravity().y)
     -- create world edge
     local nodeForWorldEdge = cc.Node:create()
     nodeForWorldEdge:setPhysicsBody(cc.PhysicsBody:createEdgeBox(cc.size(self.visibleSize.width, self.visibleSize.height)))
@@ -109,6 +113,7 @@ function AnimationLayer:onEnter()
     leadingRole:getPhysicsBody():setContactTestBitmask(1)
     leadingRole:getPhysicsBody():setCollisionBitmask(1)
     leadingRole:setTag(TAG_LEADING_ROLE)
+    leadingRole:getPhysicsBody():getShape(0):setFriction(0)
     cclog("leadingRole category:%d", leadingRole:getPhysicsBody():getCategoryBitmask())
     cclog("leadingRole contact test", leadingRole:getPhysicsBody():getContactTestBitmask())
     self:addChild(leadingRole)
@@ -138,6 +143,7 @@ function AnimationLayer:onEnter()
     -- keyboard event
     local function onKeyPressed(keyCode, event)
         local targetSprite = event:getCurrentTarget()
+        local targetBody = targetSprite:getPhysicsBody()
         local pressedKey = self.pressedDirectionKey
 --        print(self.directionKeyNum)
         if pressedKey[keyCode] ~= nil then
@@ -147,40 +153,38 @@ function AnimationLayer:onEnter()
         if keyCode == KEY_D then -- foward move
             targetSprite:setFlippedX(false)
             if self.isLeadingRoleOnTheGround == false then return end
+            if pressedKey[KEY_A] then -- contrary direction and stop
+                targetBody:setVelocity(cc.p(0, 0))
+                targetSprite:stopActionByTag(TAG_BACKWARD_ACTION)
+                return
+            end
+            targetBody:setVelocity(cc.p(WALK_SPEED, 0))
             local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
-            local walkAction = cc.Animate:create(animation)
-            local moveBy = cc.MoveBy:create(5, cc.p(self.visibleSize.width, 0))
-            local forward = cc.Spawn:create(walkAction, moveBy)
+            local forward = cc.Animate:create(animation)
             forward:setTag(TAG_FORWARD_ACTION)
             targetSprite:runAction(forward)
+--            targetBody:applyImpulse(cc.p(WALK_SPEED* targetBody:getMass(), 0))
         elseif keyCode == KEY_A then -- backward move
             targetSprite:setFlippedX(true)
             if self.isLeadingRoleOnTheGround == false then return end
+            if pressedKey[KEY_D] then -- contrary direction and stop
+                targetBody:setVelocity(cc.p(0, 0))
+                targetSprite:stopActionByTag(TAG_FORWARD_ACTION)
+                return
+            end
+            targetBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
             local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
-            local walkAction = cc.Animate:create(animation)
-            local moveBy = cc.MoveBy:create(5, cc.p(-self.visibleSize.width, 0))
-            local backward = cc.Spawn:create(walkAction, moveBy)
+            local backward = cc.Animate:create(animation)
             backward:setTag(TAG_BACKWARD_ACTION)
             targetSprite:runAction(backward)
+        elseif keyCode == cc.KeyCode.KEY_U and self.isLeadingRoleOnTheGround then -- test jump
+            local jump = cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1)
+            targetSprite:runAction(jump)
         elseif keyCode == KEY_J and self.isLeadingRoleOnTheGround then -- jump
-            targetSprite:stopAllActions()
-            if pressedKey[KEY_D] and pressedKey[KEY_A] then
-                local jump = cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1)
-                jump:setTag(TAG_JUMP_ACTION)
-                targetSprite:runAction(jump)	
-            elseif pressedKey[KEY_D] then
-                local jumpForward = cc.JumpBy:create(0.5, cc.p(100, 0), JUMP_HEIGHT, 1)
-                jumpForward:setTag(TAG_JUMP_FORWARD_ACTION)
-                targetSprite:runAction(jumpForward)
-            elseif pressedKey[KEY_A] then
-                local jumpBackward = cc.JumpBy:create(0.5, cc.p(-100, 0), JUMP_HEIGHT, 1)
-                jumpBackward:setTag(TAG_JUMP_BACKWARD_ACTION)
-                targetSprite:runAction(jumpBackward)
-            else
-                local jump = cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1)
-                jump:setTag(TAG_JUMP_ACTION)
-                targetSprite:runAction(jump)
-            end
+            targetSprite:stopAllActions() -- stop all action
+            targetSprite:getPhysicsBody():applyImpulse(cc.p(0, 
+                         JUMP_UP_SPEED* targetSprite:getPhysicsBody():getMass()))
+                         
         elseif keyCode == KEY_K then -- attack
             local attack = cc.Sprite:createWithSpriteFrame(
                            cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
@@ -190,9 +194,7 @@ function AnimationLayer:onEnter()
             attack:getPhysicsBody():setCategoryBitmask(4)
             attack:getPhysicsBody():setContactTestBitmask(2)
             attack:getPhysicsBody():setCollisionBitmask(2)
-            
             attack:setTag(TAG_LEADING_ROLE_ATTACK)
---            print(attack:getPhysicsBody():getMass())
 
             local lead_x, lead_y = targetSprite:getPosition()
             local leadSize = targetSprite:getContentSize()
@@ -280,11 +282,30 @@ function AnimationLayer:onEnter()
     local function onKeyReleased(keyCode, event)
         local pressedKey = self.pressedDirectionKey
         local targetSprite = event:getCurrentTarget()
+        local targetBody = targetSprite:getPhysicsBody()
         if pressedKey[keyCode] then
-            if keyCode == cc.KeyCode.KEY_D then
-                targetSprite:stopActionByTag(TAG_FORWARD_ACTION)
-            elseif keyCode == cc.KeyCode.KEY_A then
-                targetSprite:stopActionByTag(TAG_BACKWARD_ACTION)
+            if keyCode == KEY_D and self.isLeadingRoleOnTheGround then
+                if pressedKey[KEY_A] then
+                    targetBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
+                    local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
+                    local backward = cc.Animate:create(animation)
+                    backward:setTag(TAG_BACKWARD_ACTION)
+                    targetSprite:runAction(backward)
+                else
+                    targetSprite:stopActionByTag(TAG_FORWARD_ACTION)
+                    targetBody:setVelocity(cc.p(0, 0))
+                end
+            elseif keyCode == KEY_A and self.isLeadingRoleOnTheGround then
+                if pressedKey[KEY_D] then
+                    targetBody:setVelocity(cc.p(WALK_SPEED, 0))
+                    local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
+                    local forward = cc.Animate:create(animation)
+                    forward:setTag(TAG_FORWARD_ACTION)
+                    targetSprite:runAction(forward)
+                else
+                    targetSprite:stopActionByTag(TAG_BACKWARD_ACTION)
+                    targetBody:setVelocity(cc.p(0, 0))
+                end
             end
             pressedKey[keyCode] = false
             self.directionKeyNum = self.directionKeyNum - 1 
@@ -323,17 +344,16 @@ function AnimationLayer:onEnter()
                         contactNormal.y = -1 * contactNormal.y 
                     end
                     cclog("onContactBegin current normal y: %f",  contactNormal.y)
-                    if contactNormal.y >= 0.1 then
+                    if contactNormal.y >= 0.1 then -- touch the ground
                         self.isLeadingRoleOnTheGround = true
+                        local velocity_x = 0
+                        local pressedKey = self.pressedDirectionKey
+                        if pressedKey[KEY_D] and pressedKey[KEY_A] then
+                        end
                     end
-                    dynamicSprite:stopActionByTag(TAG_JUMP_FORWARD_ACTION)
-                    dynamicSprite:stopActionByTag(TAG_JUMP_BACKWARD_ACTION)
-                    dynamicSprite:stopActionByTag(TAG_JUMP_ACTION)
                     dynamicSprite:getPhysicsBody():setVelocity(cc.p(velocity.x, -0.2*velocity.y))
                 else
                     dynamicSprite:getPhysicsBody():setVelocity(cc.p( -0.3*velocity.x, velocity.y))
-                    dynamicSprite:stopActionByTag(TAG_JUMP_FORWARD_ACTION)
-                    dynamicSprite:stopActionByTag(TAG_JUMP_BACKWARD_ACTION)
                 end
                 velocity = dynamicSprite:getPhysicsBody():getVelocity()
                 cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
