@@ -336,10 +336,11 @@ function AnimationLayer:onEnter()
             end
             if dynamicSprite:getTag() == TAG_LEADING_ROLE then
                 local contactNormal = contact:getContactData().normal
-                local velocity = dynamicSprite:getPhysicsBody():getVelocity()
+                local dynamicSpriteBody = dynamicSprite:getPhysicsBody()
+                local velocity = dynamicSpriteBody:getVelocity()
                 cclog("velocity before contact x, y:  %f, %f", velocity.x, velocity.y)
                 cclog("onContactBegin original normal x, y:  %f, %f", contactNormal.x, contactNormal.y)
-                if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then
+                if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then -- vertical touch
                     if isSwapped then -- set the normal emit from map
                         contactNormal.y = -1 * contactNormal.y 
                     end
@@ -349,19 +350,33 @@ function AnimationLayer:onEnter()
                         local velocity_x = 0
                         local pressedKey = self.pressedDirectionKey
                         if pressedKey[KEY_D] and pressedKey[KEY_A] then
+                            dynamicSpriteBody:setVelocity(cc.p(0, 0))
+                        elseif pressedKey[KEY_D] then
+                        dynamicSpriteBody:setVelocity(cc.p(WALK_SPEED, 0))
+                            local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
+                            local forward = cc.Animate:create(animation)
+                            forward:setTag(TAG_FORWARD_ACTION)
+                            dynamicSprite:runAction(forward)
+                        elseif pressedKey[KEY_A] then
+                            dynamicSpriteBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
+                            local animation = cc.AnimationCache:getInstance():getAnimation("leadingRole_forward_walk")
+                            local backward = cc.Animate:create(animation)
+                            backward:setTag(TAG_BACKWARD_ACTION)
+                            dynamicSprite:runAction(backward)
+                        else
+                            dynamicSpriteBody:setVelocity(cc.p(0, 0))
                         end
-                    end
-                    dynamicSprite:getPhysicsBody():setVelocity(cc.p(velocity.x, -0.2*velocity.y))
-                else
-                    dynamicSprite:getPhysicsBody():setVelocity(cc.p( -0.3*velocity.x, velocity.y))
+                    else -- touch the roof
+                        dynamicSpriteBody:setVelocity(cc.p(velocity.x, -0.2*velocity.y))
+                    end            
+                else -- horizontal touch
+                    dynamicSpriteBody:setVelocity(cc.p( -0.3*velocity.x, velocity.y))
                 end
                 velocity = dynamicSprite:getPhysicsBody():getVelocity()
                 cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
             elseif dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
                 self:removeChild(dynamicSprite, true)
             end
---            print("touch")
---            local contactPoint = contact:getContactData().points
         elseif a:getTag() == TAG_BOSS or b:getTag() == TAG_BOSS then
             local boss, dynamicSprite
             if a:getTag() == TAG_BOSS then
