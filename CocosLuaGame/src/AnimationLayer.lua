@@ -14,6 +14,7 @@ local TAG_MAP = 103
 local TAG_LEADING_ROLE = 104
 local TAG_LEADING_ROLE_ATTACK = 105
 local TAG_BOSS = 106
+local TAG_ENEMY_ATTACK = 107
 
 local KEY_UP = cc.KeyCode.KEY_W
 local KEY_RIGHT = cc.KeyCode.KEY_D
@@ -25,20 +26,33 @@ local JUMP_HEIGHT = 150
 local GRAVITY_Y = -400
 local JUMP_UP_SPEED = 350
 local WALK_SPEED = 70
+local ATTACK_SPEED = 100
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
 
-local test_LEFT = 0
-local test_RIGHT = 0
+local RIGHT = 1
+local DOWN = 2
+local LEFT = 3
+local UP = 4
+local RIGHT_DOWN = 5
+local LEFT_DOWN = 6
+local LEFT_UP = 7
+local RIGHT_UP = 8
 
 
+local s_scheduler = cc.Director:getInstance():getScheduler()
+local s_enemyMove = nil
+local ATTACK_DISTANCE_X = 180
 
 -- static method. return instance of MainScene, conformed with C++ form
 function AnimationLayer.create()
     local layer = AnimationLayer.new()
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
+        local schedulerEntry1 = nil
         if event == "enter" then
             layer:onEnter()
+            schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemyMove, 2, false)
         elseif event == "exit" then
+            s_scheduler:unscheduleScriptEntry(schedulerEntry1)
         end
     end
     layer:registerScriptHandler(onNodeEvent)
@@ -71,7 +85,7 @@ function AnimationLayer:onEnter()
     
 --    nodeForWorldEdge:getPhysicsBody():setCollisionBitmask(0x1)
     self:addChild(nodeForWorldEdge)
-    
+       
     local stone = cc.Sprite:create("maps/stone.png")
     stone:setPosition(self.visibleSize.width/2, 120)
     stone:setPhysicsBody(cc.PhysicsBody:createBox(stone:getContentSize()))
@@ -104,6 +118,8 @@ function AnimationLayer:onEnter()
 --               "leading_role_attack")
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
         "leading_role_attack")
+    frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack.png"):getSpriteFrame(),
+        "boss_attack")
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])  
 --    leadingRole:setAnchorPoint(0, 0)
@@ -126,22 +142,63 @@ function AnimationLayer:onEnter()
     local bossForwardFrames = {}
     for i = 1, 4 do
         bossForwardFrames[i] = cc.SpriteFrame:createWithTexture(boss_altas, 
-            cc.rect((i-1)*55, 77, 55, 77))
+            cc.rect((i-1)*55, 2*77, 55, 77))
     end
     local animation2 = cc.Animation:createWithSpriteFrames(bossForwardFrames, 0.15, -1)
     animCache:addAnimation(animation2,"boss_forward_walk")
     local boss = cc.Sprite:createWithSpriteFrame(bossForwardFrames[1])
 --    boss:setFlippedX(true)
+    boss:setFlippedX(true)
     boss:setPosition(self.visibleSize.width*4/5, self.visibleSize.height/2)
     boss:setTag(TAG_BOSS)
     boss:setPhysicsBody(cc.PhysicsBody:createBox(boss:getContentSize()))
-    boss:getPhysicsBody():setCategoryBitmask(2)
-    boss:getPhysicsBody():setContactTestBitmask(4)
-    boss:getPhysicsBody():setCollisionBitmask(4)
+    local bossBody =  boss:getPhysicsBody()
+    bossBody:setCategoryBitmask(2)
+    bossBody:setContactTestBitmask(4)
+    bossBody:setCollisionBitmask(4)
+    bossBody:getShape(0):setFriction(0)
+    --add run action 
+    local animation = cc.AnimationCache:getInstance():getAnimation("boss_forward_walk")
+    local forward = cc.Animate:create(animation)
+    boss:runAction(forward)
+    local actionManager = cc.Director:getInstance():getActionManager()
+    actionManager:pauseTarget(boss)
     self:addChild(boss)
     
     -- Simple AI
-    
+    s_enemyMove = function ()  --FIXME Simple AI
+        local leadingRole_x, leadingRole_y = leadingRole:getPosition()
+        local boss_x, boss_y = boss:getPosition()
+        local distance_x = leadingRole_x - boss_x
+        local distance_x_abs = math.abs(distance_x)
+        if distance_x >= 0 then
+            boss:setFlippedX(false)
+        else
+            boss:setFlippedX(true)
+        end
+        if distance_x_abs > ATTACK_DISTANCE_X then -- move closer
+            actionManager:resumeTarget(boss)
+            if distance_x >= 0 then
+                bossBody:setVelocity(cc.p(WALK_SPEED, 0))
+            else
+                bossBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
+            end  
+            
+        else -- attack 
+            bossBody:setVelocity(cc.p(0, 0))
+            actionManager:pauseTarget(boss)
+            local attack = cc.Sprite:createWithSpriteFrame(
+                cc.SpriteFrameCache:getInstance():getSpriteFrame("boss_attack"))
+            attack:setPhysicsBody(cc.PhysicsBody:createBox(
+                cc.size(attack:getContentSize().width , attack:getContentSize().height)))
+            attack:getPhysicsBody():setCategoryBitmask(8)
+            attack:getPhysicsBody():setContactTestBitmask(1)
+            attack:getPhysicsBody():setCollisionBitmask(1)
+            attack:setTag(TAG_ENEMY_ATTACK)
+            self:setUpAttackForSprite(boss, attack, LEFT_UP) --FIXME CURRENT                                             
+        end
+        
+    end
     
     -- keyboard event
     local function onKeyPressed(keyCode, event)
@@ -199,89 +256,40 @@ function AnimationLayer:onEnter()
             attack:getPhysicsBody():setCollisionBitmask(2)
             attack:setTag(TAG_LEADING_ROLE_ATTACK)
 
-            local lead_x, lead_y = targetSprite:getPosition()
-            local leadSize = targetSprite:getContentSize()
-            local attackPosi = cc.p(0, 0)
-            local moveBy = nil
-            local function forwardAndBackwardAttack()
+            local function rightOrLeftAttack()
                 if targetSprite:isFlippedX() then
-                    attack:setFlippedX(true)
-                    attackPosi.x = lead_x - leadSize.width/2 - attack:getContentSize().width/2
-                    attackPosi.y = lead_y
-                    moveBy = cc.MoveBy:create(2, cc.p(-self.visibleSize.width, 0))
+                    self:setUpAttackForSprite(targetSprite, attack, LEFT)
                 else
-                    attack:setFlippedX(false)
-                    attackPosi.x = lead_x + leadSize.width/2 + attack:getContentSize().width/2
-                    attackPosi.y = lead_y
-                    moveBy = cc.MoveBy:create(2, cc.p(self.visibleSize.width, 0))       
-                end                
+                    self:setUpAttackForSprite(targetSprite, attack, RIGHT)
+                end
             end
-            
             if self.directionKeyNum == 1 then
                 if pressedKey[KEY_UP] then -- up
---                    attack:setFlippedX(false)
-                    attack:setRotation(-90)
-                    attackPosi.x = lead_x
-                    attackPosi.y = lead_y + leadSize.height/2 + attack:getContentSize().height/2
-                    moveBy = cc.MoveBy:create(2, cc.p(0, self.visibleSize.height))
-            elseif pressedKey[KEY_DOWN] then --down
-                    attack:setRotation(90)
-                    attackPosi.x = lead_x
-                    attackPosi.y = lead_y - leadSize.height/2 - attack:getContentSize().height/2
-                    moveBy = cc.MoveBy:create(2, cc.p(0, -self.visibleSize.height))
+                    self:setUpAttackForSprite(targetSprite, attack, UP)
+                elseif pressedKey[KEY_DOWN] then --down
+                    self:setUpAttackForSprite(targetSprite, attack, DOWN)
                 else
-                    forwardAndBackwardAttack()
+                    rightOrLeftAttack()
                 end        
             elseif self.directionKeyNum == 2 then
-                local maxLenght =  math.max(self.visibleSize.width, self.visibleSize.height)
                 if pressedKey[KEY_UP] and pressedKey[KEY_RIGHT] then -- up right
-                    attack:setRotation(-45)
-                    attackPosi.x = lead_x + leadSize.width/2 + 
-                                   math.cos(45)*attack:getContentSize().width/2
-                    attackPosi.y = lead_y + leadSize.height/2 +
-                                   math.sin(45)*attack:getContentSize().width/2
-                    
-                    moveBy = cc.MoveBy:create(2, cc.p(maxLenght, maxLenght))
-                elseif pressedKey[KEY_RIGHT] and pressedKey[KEY_DOWN] then -- down right 
-                    attack:setRotation(45)
-                    attackPosi.x = lead_x + leadSize.width/2 + 
-                                   math.cos(45)*attack:getContentSize().width/2
-                    attackPosi.y = lead_y - leadSize.height/2 -
-                                   math.sin(45)*attack:getContentSize().width/2
-                    moveBy = cc.MoveBy:create(2, cc.p(maxLenght, -maxLenght))
+                    self:setUpAttackForSprite(targetSprite, attack, RIGHT_UP)
+                elseif pressedKey[KEY_RIGHT] and pressedKey[KEY_DOWN] then -- down right
+                    self:setUpAttackForSprite(targetSprite, attack, RIGHT_DOWN)
                 elseif pressedKey[KEY_LEFT] and pressedKey[KEY_DOWN] then -- down left
-                    attack:setRotation(135)
-                    attackPosi.x = lead_x - leadSize.width/2 - 
-                                   math.cos(45)*attack:getContentSize().width/2
-                    attackPosi.y = lead_y - leadSize.height/2 -
-                                   math.sin(45)*attack:getContentSize().width/2
-                    moveBy = cc.MoveBy:create(2, cc.p(-maxLenght, -maxLenght))
+                    self:setUpAttackForSprite(targetSprite, attack, LEFT_DOWN)
                 elseif pressedKey[KEY_LEFT] and pressedKey[KEY_UP] then -- up left
-                    attack:setRotation(-135)
-                    attackPosi.x = lead_x - leadSize.width/2 - 
-                                   math.cos(45)*attack:getContentSize().width/2 
-                    attackPosi.y = lead_y + leadSize.height/2 +
-                                   math.sin(45)*attack:getContentSize().width/2
-                    moveBy = cc.MoveBy:create(2, cc.p(-maxLenght, maxLenght))
+                    self:setUpAttackForSprite(targetSprite, attack, LEFT_UP)
                 else
-                    forwardAndBackwardAttack()                 
+                rightOrLeftAttack()
                 end
             else
-                forwardAndBackwardAttack()     
+                rightOrLeftAttack()
             end
-
-            local function cleanupAttack()
-                self:removeChild(attack, true)
-            end
---        local callfunc = cc.CallFunc:create(cleanupAttack)
---        attack:runAction(cc.Sequence:create(moveBy, callfunc))
-        attack:runAction(moveBy)
-        attack:setPosition(attackPosi)
-        self:addChild(attack)
         cclog("Aniamtion layer child nums: %d", self:getChildrenCount())
         end
     end
-    
+        
     local function onKeyReleased(keyCode, event)
         local pressedKey = self.pressedDirectionKey
         local targetSprite = event:getCurrentTarget()
@@ -381,7 +389,8 @@ function AnimationLayer:onEnter()
                 end
                 velocity = dynamicSprite:getPhysicsBody():getVelocity()
                 cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
-            elseif dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
+            elseif dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK or 
+                   dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
                 self:removeChild(dynamicSprite, true)
             end
         elseif a:getTag() == TAG_BOSS or b:getTag() == TAG_BOSS then
@@ -442,6 +451,67 @@ function AnimationLayer:onEnter()
     contactListener:registerScriptHandler(onContactEnd, cc.Handler.EVENT_PHYSICS_CONTACT_SEPERATE)
     eventDispatcher:addEventListenerWithSceneGraphPriority(contactListener, self)
     
+end
+
+function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)--FIXME 
+    attack:getPhysicsBody():setGravityEnable(false)
+    local lead_x, lead_y = targetSprite:getPosition()
+    local leadSize = targetSprite:getContentSize()
+    local attackPosi = cc.p(0, 0)
+    local velocity = cc.p(0, 0)
+    local ATTACK_OFFSET = 30
+    if directoinNum == RIGHT then
+        attack:setFlippedX(false)
+        attackPosi.x = lead_x + leadSize.width/2 + attack:getContentSize().width/2 - ATTACK_OFFSET
+        attackPosi.y = lead_y
+        velocity = cc.p(ATTACK_SPEED, 0)  
+    elseif directoinNum == DOWN then
+        attack:setRotation(90)
+        attackPosi.x = lead_x
+        attackPosi.y = lead_y - leadSize.height/2 - attack:getContentSize().height/2 + ATTACK_OFFSET
+        velocity = cc.p(0, -1*ATTACK_SPEED)
+    elseif directoinNum == LEFT then
+        attack:setFlippedX(true)
+        attackPosi.x = lead_x - leadSize.width/2 - attack:getContentSize().width/2 + ATTACK_OFFSET
+        attackPosi.y = lead_y
+        velocity = cc.p(-1*ATTACK_SPEED, 0)
+    elseif directoinNum == UP then
+        attack:setRotation(-90)
+        attackPosi.x = lead_x
+        attackPosi.y = lead_y + leadSize.height/2 + attack:getContentSize().height/2
+        velocity = cc.p(0, ATTACK_SPEED)
+    elseif directoinNum == RIGHT_UP then
+        attack:setRotation(-45)
+        attackPosi.x = lead_x + leadSize.width/2 + 
+            math.cos(45)*attack:getContentSize().width/2 - ATTACK_OFFSET*0.707
+        attackPosi.y = lead_y + leadSize.height/2 +
+            math.sin(45)*attack:getContentSize().width/2 - ATTACK_OFFSET*0.707
+        velocity = cc.p(0.707*ATTACK_SPEED  , 0.707*ATTACK_SPEED) 
+    elseif directoinNum == RIGHT_DOWN then
+        attack:setRotation(45)
+        attackPosi.x = lead_x + leadSize.width/2 + 
+            math.cos(45)*attack:getContentSize().width/2 - ATTACK_OFFSET*0.707
+        attackPosi.y = lead_y - leadSize.height/2 -
+            math.sin(45)*attack:getContentSize().width/2 + ATTACK_OFFSET*0.707
+        velocity = cc.p(0.707*ATTACK_SPEED  , -0.707*ATTACK_SPEED) 
+    elseif directoinNum == LEFT_DOWN then
+        attack:setRotation(135)
+        attackPosi.x = lead_x - leadSize.width/2 - 
+            math.cos(45)*attack:getContentSize().width/2 + ATTACK_OFFSET*0.707
+        attackPosi.y = lead_y - leadSize.height/2 -
+            math.sin(45)*attack:getContentSize().width/2 + ATTACK_OFFSET*0.707
+        velocity = cc.p(-0.707*ATTACK_SPEED  , -0.707*ATTACK_SPEED) 
+    elseif directoinNum == LEFT_UP then
+        attack:setRotation(-135)
+        attackPosi.x = lead_x - leadSize.width/2 - 
+            math.cos(45)*attack:getContentSize().width/2 + ATTACK_OFFSET*0.707
+        attackPosi.y = lead_y + leadSize.height/2 +
+            math.sin(45)*attack:getContentSize().width/2 - ATTACK_OFFSET*0.707
+        velocity = cc.p(-0.707*ATTACK_SPEED  , 0.707*ATTACK_SPEED) 
+    end
+    attack:getPhysicsBody():setVelocity(velocity) 
+    attack:setPosition(attackPosi)
+    self:addChild(attack) 
 end
 
 return AnimationLayer
