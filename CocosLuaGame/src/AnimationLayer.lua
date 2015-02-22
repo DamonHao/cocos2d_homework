@@ -28,7 +28,9 @@ local JUMP_UP_SPEED = 350
 local WALK_SPEED = 70
 local ATTACK_SPEED = 100
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
+local ATTACK_Y_THRESHOLD = 50
 
+-- control direction
 local RIGHT = 1
 local DOWN = 2
 local LEFT = 3
@@ -129,7 +131,7 @@ function AnimationLayer:onEnter()
                 leadingRole:getContentSize().width-15,leadingRole:getContentSize().height)))
     leadingRole:getPhysicsBody():setRotationEnable(false)
     leadingRole:getPhysicsBody():setCategoryBitmask(1)
-    leadingRole:getPhysicsBody():setContactTestBitmask(1)
+    leadingRole:getPhysicsBody():setContactTestBitmask(8)
     leadingRole:getPhysicsBody():setCollisionBitmask(1)
     leadingRole:setTag(TAG_LEADING_ROLE)
     leadingRole:getPhysicsBody():getShape(0):setFriction(0)
@@ -185,7 +187,7 @@ function AnimationLayer:onEnter()
             end  
             
         else -- attack 
-            bossBody:setVelocity(cc.p(0, 0))
+            bossBody:setVelocity(cc.p(0, 0)) --FIXME CURRENT
             actionManager:pauseTarget(boss)
             local attack = cc.Sprite:createWithSpriteFrame(
                 cc.SpriteFrameCache:getInstance():getSpriteFrame("boss_attack"))
@@ -193,9 +195,18 @@ function AnimationLayer:onEnter()
                 cc.size(attack:getContentSize().width , attack:getContentSize().height)))
             attack:getPhysicsBody():setCategoryBitmask(8)
             attack:getPhysicsBody():setContactTestBitmask(1)
-            attack:getPhysicsBody():setCollisionBitmask(1)
+            attack:getPhysicsBody():setCollisionBitmask(0)
             attack:setTag(TAG_ENEMY_ATTACK)
-            self:setUpAttackForSprite(boss, attack, LEFT_UP) --FIXME CURRENT                                             
+            local distance_y_abs = math.abs(leadingRole_y - boss_y)
+            if distance_y_abs <=  ATTACK_Y_THRESHOLD then
+                if distance_x >= 0 then
+                    self:setUpAttackForSprite(boss, attack, RIGHT) 
+                else
+                    self:setUpAttackForSprite(boss, attack, LEFT) 
+                end              
+            else
+            end 
+                                                         
         end
         
     end
@@ -253,7 +264,7 @@ function AnimationLayer:onEnter()
             attack:getPhysicsBody():setGravityEnable(false)
             attack:getPhysicsBody():setCategoryBitmask(4)
             attack:getPhysicsBody():setContactTestBitmask(2)
-            attack:getPhysicsBody():setCollisionBitmask(2)
+            attack:getPhysicsBody():setCollisionBitmask(0)
             attack:setTag(TAG_LEADING_ROLE_ATTACK)
 
             local function rightOrLeftAttack()
@@ -335,7 +346,7 @@ function AnimationLayer:onEnter()
     local function onContactBegin(contact)
         local a = contact:getShapeA():getBody():getNode()
         local b = contact:getShapeB():getBody():getNode()
-        cclog("contact in") 
+        cclog("contact in a tag: %d, b tag: %d", a:getTag(), b:getTag()) 
         if a:getTag() == TAG_MAP or b:getTag() == TAG_MAP then
             local map, dynamicSprite
             local isSwapped = false
@@ -356,10 +367,10 @@ function AnimationLayer:onEnter()
                 if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then -- vertical touch
                     if isSwapped then -- set the normal emit from map
                         contactNormal.y = -1 * contactNormal.y 
-                    end
-                    cclog("onContactBegin current normal y: %f",  contactNormal.y)
-                    if contactNormal.y >= 0.1 then -- touch the ground
-                        self.isLeadingRoleOnTheGround = true
+                end
+                cclog("onContactBegin current normal y: %f",  contactNormal.y)
+                if contactNormal.y >= 0.1 then -- touch the ground
+                    self.isLeadingRoleOnTheGround = true
                         local velocity_x = 0
                         local pressedKey = self.pressedDirectionKey
                         if pressedKey[KEY_RIGHT] and pressedKey[KEY_LEFT] then
@@ -403,6 +414,18 @@ function AnimationLayer:onEnter()
                 dynamicSprite = a
             end
             if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
+                self:removeChild(dynamicSprite, true)
+            end
+        elseif a:getTag() == TAG_LEADING_ROLE or b:getTag() == TAG_LEADING_ROLE then
+            local leadingRole, dynamicSprite
+            if a:getTag() == TAG_LEADING_ROLE then
+                leadingRole = a 
+                dynamicSprite = b    
+            else
+                leadingRole = b 
+                dynamicSprite = a
+            end
+            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
                 self:removeChild(dynamicSprite, true)
             end
         end
@@ -453,7 +476,7 @@ function AnimationLayer:onEnter()
     
 end
 
-function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)--FIXME 
+function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum) 
     attack:getPhysicsBody():setGravityEnable(false)
     local lead_x, lead_y = targetSprite:getPosition()
     local leadSize = targetSprite:getContentSize()
