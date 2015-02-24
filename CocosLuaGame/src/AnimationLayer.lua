@@ -1,10 +1,3 @@
-
-require("Helper")
---create class AnimationLayer
-local AnimationLayer = class("AnimationLayer", function()
-	return cc.Layer:create()
-end)
-
 local TAG_FORWARD_ACTION = 1
 local TAG_BACKWARD_ACTION = 2
 local TAG_JUMP_FORWARD_ACTION = 3
@@ -44,6 +37,13 @@ local RIGHT_UP = 8
 local s_scheduler = cc.Director:getInstance():getScheduler()
 local s_enemyMove = nil
 local ATTACK_DISTANCE_X = 180
+local ATTACK_DISTANCE_X_FOR_Y = 50
+
+require("Helper")
+--create class AnimationLayer
+local AnimationLayer = class("AnimationLayer", function()
+    return cc.Layer:create()
+end)
 
 -- static method. return instance of MainScene, conformed with C++ form
 function AnimationLayer.create()
@@ -52,9 +52,9 @@ function AnimationLayer.create()
         local schedulerEntry1 = nil
         if event == "enter" then
             layer:onEnter()
-            schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemyMove, 2, false)
+--            schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemyMove, 2, false)
         elseif event == "exit" then
-            s_scheduler:unscheduleScriptEntry(schedulerEntry1)
+--            s_scheduler:unscheduleScriptEntry(schedulerEntry1)
         end
     end
     layer:registerScriptHandler(onNodeEvent)
@@ -115,17 +115,13 @@ function AnimationLayer:onEnter()
     
     -- cache sprite frame
     local frameCache = cc.SpriteFrameCache:getInstance()
---    frameCache:addSpriteFrame(forwardFrames[1],"foward")
---    frameCache:addSpriteFrame(cc.SpriteFrame:create("attacks/leading_role_attack.png"),
---               "leading_role_attack")
+
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
         "leading_role_attack")
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack.png"):getSpriteFrame(),
         "boss_attack")
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])  
---    leadingRole:setAnchorPoint(0, 0)
---    leadingRole:setPosition(0 , 0)
     leadingRole:setPosition(self.visibleSize.width/5, self.visibleSize.height/2)
     leadingRole:setPhysicsBody(cc.PhysicsBody:createBox(cc.size(
                 leadingRole:getContentSize().width-15,leadingRole:getContentSize().height)))
@@ -134,9 +130,11 @@ function AnimationLayer:onEnter()
     leadingRole:getPhysicsBody():setContactTestBitmask(8)
     leadingRole:getPhysicsBody():setCollisionBitmask(1)
     leadingRole:setTag(TAG_LEADING_ROLE)
+    leadingRole:setAnchorPoint(0.5, 0.5)
     leadingRole:getPhysicsBody():getShape(0):setFriction(0)
     cclog("leadingRole category:%d", leadingRole:getPhysicsBody():getCategoryBitmask())
     cclog("leadingRole contact test", leadingRole:getPhysicsBody():getContactTestBitmask())
+       
     self:addChild(leadingRole)
     
     -- set up boss 
@@ -149,7 +147,6 @@ function AnimationLayer:onEnter()
     local animation2 = cc.Animation:createWithSpriteFrames(bossForwardFrames, 0.15, -1)
     animCache:addAnimation(animation2,"boss_forward_walk")
     local boss = cc.Sprite:createWithSpriteFrame(bossForwardFrames[1])
---    boss:setFlippedX(true)
     boss:setFlippedX(true)
     boss:setPosition(self.visibleSize.width*4/5, self.visibleSize.height/2)
     boss:setTag(TAG_BOSS)
@@ -167,48 +164,14 @@ function AnimationLayer:onEnter()
     actionManager:pauseTarget(boss)
     self:addChild(boss)
     
+    --FIXME setup  blood volume
+    local leadingRoleBloodVolume = self:setUpBloodVolumeForRoles(leadingRole)
+    
+    
+    
     -- Simple AI
     s_enemyMove = function ()  --FIXME Simple AI
-        local leadingRole_x, leadingRole_y = leadingRole:getPosition()
-        local boss_x, boss_y = boss:getPosition()
-        local distance_x = leadingRole_x - boss_x
-        local distance_x_abs = math.abs(distance_x)
-        if distance_x >= 0 then
-            boss:setFlippedX(false)
-        else
-            boss:setFlippedX(true)
-        end
-        if distance_x_abs > ATTACK_DISTANCE_X then -- move closer
-            actionManager:resumeTarget(boss)
-            if distance_x >= 0 then
-                bossBody:setVelocity(cc.p(WALK_SPEED, 0))
-            else
-                bossBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
-            end  
-            
-        else -- attack 
-            bossBody:setVelocity(cc.p(0, 0)) --FIXME CURRENT
-            actionManager:pauseTarget(boss)
-            local attack = cc.Sprite:createWithSpriteFrame(
-                cc.SpriteFrameCache:getInstance():getSpriteFrame("boss_attack"))
-            attack:setPhysicsBody(cc.PhysicsBody:createBox(
-                cc.size(attack:getContentSize().width , attack:getContentSize().height)))
-            attack:getPhysicsBody():setCategoryBitmask(8)
-            attack:getPhysicsBody():setContactTestBitmask(1)
-            attack:getPhysicsBody():setCollisionBitmask(0)
-            attack:setTag(TAG_ENEMY_ATTACK)
-            local distance_y_abs = math.abs(leadingRole_y - boss_y)
-            if distance_y_abs <=  ATTACK_Y_THRESHOLD then
-                if distance_x >= 0 then
-                    self:setUpAttackForSprite(boss, attack, RIGHT) 
-                else
-                    self:setUpAttackForSprite(boss, attack, LEFT) 
-                end              
-            else
-            end 
-                                                         
-        end
-        
+        self:executeAIForEnemy(boss, leadingRole, "boss_attack")
     end
     
     -- keyboard event
@@ -535,6 +498,68 @@ function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)
     attack:getPhysicsBody():setVelocity(velocity) 
     attack:setPosition(attackPosi)
     self:addChild(attack) 
+end
+
+function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameName) 
+    local enemyBody = enemy:getPhysicsBody()
+    local leadingRole_x, leadingRole_y = leadingRole:getPosition()
+    local enemy_x, enemy_y = enemy:getPosition()
+    local distance_x = leadingRole_x - enemy_x
+    local distance_x_abs = math.abs(distance_x)
+    local actionManager = cc.Director:getInstance():getActionManager()
+    if distance_x >= 0 then
+        enemy:setFlippedX(false)
+    else
+        enemy:setFlippedX(true)
+    end
+    if distance_x_abs > ATTACK_DISTANCE_X then -- move closer
+        actionManager:resumeTarget(enemy)
+        if distance_x >= 0 then
+            enemyBody:setVelocity(cc.p(WALK_SPEED, 0))
+        else
+            enemyBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
+        end  
+        
+    else -- attack 
+        enemyBody:setVelocity(cc.p(0, 0))
+        actionManager:pauseTarget(enemy)
+        local attack = cc.Sprite:createWithSpriteFrame(
+            cc.SpriteFrameCache:getInstance():getSpriteFrame(attackSpriteFrameName))
+        attack:setPhysicsBody(cc.PhysicsBody:createBox(
+            cc.size(attack:getContentSize().width , attack:getContentSize().height)))
+        attack:getPhysicsBody():setCategoryBitmask(8)
+        attack:getPhysicsBody():setContactTestBitmask(1)
+        attack:getPhysicsBody():setCollisionBitmask(0)
+        attack:setTag(TAG_ENEMY_ATTACK)
+        local distance_y_abs = math.abs(leadingRole_y - enemy_y)
+        if distance_y_abs <=  ATTACK_Y_THRESHOLD then
+            if distance_x >= 0 then
+                self:setUpAttackForSprite(enemy, attack, RIGHT) 
+            else
+                self:setUpAttackForSprite(enemy, attack, LEFT) 
+            end              
+        else
+            cclog("dis x: %f", distance_x_abs)
+            if enemy:getTag() == TAG_BOSS then
+                if distance_x_abs <= ATTACK_DISTANCE_X_FOR_Y then
+                    self:setUpAttackForSprite(enemy, attack, UP)
+                end
+            end
+        end                                                       
+    end
+end
+
+function AnimationLayer:setUpBloodVolumeForRoles(targetSprite) --FIXME CURRENT
+    local bloodVolume = cc.ProgressTimer:create(cc.Sprite:create("roles/blood_foreground.png"))
+    bloodVolume:setType(cc.PROGRESS_TIMER_TYPE_BAR)
+    bloodVolume:setMidpoint(cc.p(0, 0))
+    bloodVolume:setBarChangeRate(cc.p(1, 0))
+    local to1 = cc.ProgressTo:create(0, 100)
+    bloodVolume:runAction(to1)
+    local targetSize = targetSprite:getContentSize()
+    bloodVolume:setPosition(targetSize.width/2 , targetSize.height+10)
+    targetSprite:addChild(bloodVolume)
+    return bloodVolume
 end
 
 return AnimationLayer
