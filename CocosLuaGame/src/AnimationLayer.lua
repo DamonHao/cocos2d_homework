@@ -35,9 +35,10 @@ local RIGHT_UP = 8
 
 
 local s_scheduler = cc.Director:getInstance():getScheduler()
-local s_enemyMove = nil
+local s_enemySimpleAI = nil
 local ATTACK_DISTANCE_X = 180
 local ATTACK_DISTANCE_X_FOR_Y = 50
+
 
 require("Helper")
 --create class AnimationLayer
@@ -52,9 +53,9 @@ function AnimationLayer.create()
         local schedulerEntry1 = nil
         if event == "enter" then
             layer:onEnter()
---            schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemyMove, 2, false)
+            schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
         elseif event == "exit" then
---            s_scheduler:unscheduleScriptEntry(schedulerEntry1)
+            s_scheduler:unscheduleScriptEntry(schedulerEntry1)
         end
     end
     layer:registerScriptHandler(onNodeEvent)
@@ -69,6 +70,7 @@ function AnimationLayer:ctor()
                            [KEY_DOWN] = false, [KEY_LEFT] = false}
     self.directionKeyNum = 0
     self.isLeadingRoleOnTheGround = true
+    self.bloodVolumeTable = {}
 end
 
 function AnimationLayer:onEnter()
@@ -84,8 +86,6 @@ function AnimationLayer:onEnter()
     nodeForWorldEdge:getPhysicsBody():setDynamic(false)
     nodeForWorldEdge:getPhysicsBody():setContactTestBitmask(ALL_BIT_ONE)
     nodeForWorldEdge:setTag(TAG_MAP)
-    
---    nodeForWorldEdge:getPhysicsBody():setCollisionBitmask(0x1)
     self:addChild(nodeForWorldEdge)
        
     local stone = cc.Sprite:create("maps/stone.png")
@@ -165,12 +165,14 @@ function AnimationLayer:onEnter()
     self:addChild(boss)
     
     --FIXME setup  blood volume
-    local leadingRoleBloodVolume = self:setUpBloodVolumeForRoles(leadingRole)
-    
+   self:setUpBloodVolumeForRoles(leadingRole)
+--   local bloodVolumeInfo = self:getBloodVolumeInfo(leadingRole)
+--   local to1 = cc.ProgressFromTo:create(2, bloodVolumeInfo.curBlood,bloodVolumeInfo.curBlood-20)
+--   bloodVolumeInfo.progressTimer:runAction(to1)
     
     
     -- Simple AI
-    s_enemyMove = function ()  --FIXME Simple AI
+    s_enemySimpleAI = function ()  --FIXME Simple AI
         self:executeAIForEnemy(boss, leadingRole, "boss_attack")
     end
     
@@ -388,8 +390,13 @@ function AnimationLayer:onEnter()
                 leadingRole = b 
                 dynamicSprite = a
             end
-            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
-                self:removeChild(dynamicSprite, true)
+            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then --FIXME CURRENT
+               self:removeChild(dynamicSprite, true)
+               local bloodVolumeInfo = self:getBloodVolumeInfo(leadingRole)
+               local to1 = cc.ProgressFromTo:create(1, bloodVolumeInfo.curBlood,
+                           bloodVolumeInfo.curBlood-10)
+               bloodVolumeInfo.curBlood = bloodVolumeInfo.curBlood-10          
+               bloodVolumeInfo.progressTimer:runAction(to1)
             end
         end
     	return true
@@ -550,16 +557,27 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
 end
 
 function AnimationLayer:setUpBloodVolumeForRoles(targetSprite) --FIXME CURRENT
+    local targetSize = targetSprite:getContentSize()
+    local bloodBackGround = cc.Sprite:create("roles/blood_background.png")
+    bloodBackGround:setPosition(targetSize.width/2 , targetSize.height+10)
+    targetSprite:addChild(bloodBackGround)
     local bloodVolume = cc.ProgressTimer:create(cc.Sprite:create("roles/blood_foreground.png"))
     bloodVolume:setType(cc.PROGRESS_TIMER_TYPE_BAR)
     bloodVolume:setMidpoint(cc.p(0, 0))
     bloodVolume:setBarChangeRate(cc.p(1, 0))
     local to1 = cc.ProgressTo:create(0, 100)
     bloodVolume:runAction(to1)
-    local targetSize = targetSprite:getContentSize()
     bloodVolume:setPosition(targetSize.width/2 , targetSize.height+10)
     targetSprite:addChild(bloodVolume)
-    return bloodVolume
+    self.bloodVolumeTable[targetSprite] = {["progressTimer"] = bloodVolume, ["curBlood"] = 100}
 end
+
+function AnimationLayer:getBloodVolumeInfo(targetSprite)
+    return self.bloodVolumeTable[targetSprite]
+end
+
+
+
+
 
 return AnimationLayer
