@@ -164,16 +164,19 @@ function AnimationLayer:onEnter()
     actionManager:pauseTarget(boss)
     self:addChild(boss)
     
+    -- set up 
+    
     --FIXME setup  blood volume
    self:setUpBloodVolumeForRoles(leadingRole)
---   local bloodVolumeInfo = self:getBloodVolumeInfo(leadingRole)
---   local to1 = cc.ProgressFromTo:create(2, bloodVolumeInfo.curBlood,bloodVolumeInfo.curBlood-20)
---   bloodVolumeInfo.progressTimer:runAction(to1)
+   self:setUpBloodVolumeForRoles(boss)
     
     
     -- Simple AI
     s_enemySimpleAI = function ()  --FIXME Simple AI
-        self:executeAIForEnemy(boss, leadingRole, "boss_attack")
+        -- set if condition in case it will pause the action that delete the sprite
+        if self:getBloodVolumeInfo(boss).curBlood > 0 then
+            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
+        end
     end
     
     -- keyboard event
@@ -380,6 +383,12 @@ function AnimationLayer:onEnter()
             end
             if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
                 self:removeChild(dynamicSprite, true)
+                local curBlood = self:changeBloodVolume(boss, -30)
+                if curBlood <= 0 then
+                    self:deathEffect(boss)
+                    --cancle the timer in case it will pause the action that delete the sprite
+--                    s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)  
+                end
             end
         elseif a:getTag() == TAG_LEADING_ROLE or b:getTag() == TAG_LEADING_ROLE then
             local leadingRole, dynamicSprite
@@ -390,13 +399,12 @@ function AnimationLayer:onEnter()
                 leadingRole = b 
                 dynamicSprite = a
             end
-            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then --FIXME CURRENT
-               self:removeChild(dynamicSprite, true)
-               local bloodVolumeInfo = self:getBloodVolumeInfo(leadingRole)
-               local to1 = cc.ProgressFromTo:create(1, bloodVolumeInfo.curBlood,
-                           bloodVolumeInfo.curBlood-10)
-               bloodVolumeInfo.curBlood = bloodVolumeInfo.curBlood-10          
-               bloodVolumeInfo.progressTimer:runAction(to1)
+            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then --FIXME add audio
+                self:removeChild(dynamicSprite, true)
+                local curBlood = self:changeBloodVolume(leadingRole, -10)
+                if curBlood <= 0 then
+                    self:deathEffect(leadingRole)  
+                end
             end
         end
     	return true
@@ -556,7 +564,7 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
     end
 end
 
-function AnimationLayer:setUpBloodVolumeForRoles(targetSprite) --FIXME CURRENT
+function AnimationLayer:setUpBloodVolumeForRoles(targetSprite)
     local targetSize = targetSprite:getContentSize()
     local bloodBackGround = cc.Sprite:create("roles/blood_background.png")
     bloodBackGround:setPosition(targetSize.width/2 , targetSize.height+10)
@@ -576,8 +584,26 @@ function AnimationLayer:getBloodVolumeInfo(targetSprite)
     return self.bloodVolumeTable[targetSprite]
 end
 
+function AnimationLayer:changeBloodVolume(targetSprite, delta)
+    local bloodVolumeInfo = self:getBloodVolumeInfo(targetSprite)
+    local to1 = cc.ProgressFromTo:create(1, bloodVolumeInfo.curBlood,
+        bloodVolumeInfo.curBlood+ delta)
+    bloodVolumeInfo.curBlood = bloodVolumeInfo.curBlood+delta          
+    bloodVolumeInfo.progressTimer:runAction(to1)
+    return bloodVolumeInfo.curBlood
+end
 
-
+function AnimationLayer:deathEffect(targetSprite)
+--    targetSprite:getPhysicsBody():setDynamic(false)
+    targetSprite:stopAllActions()
+    local action1 = cc.Blink:create(1, 3)
+    local function deleteSprite()
+        self:removeChild(targetSprite, true)	
+    end
+    local callfunc = cc.CallFunc:create(deleteSprite)
+    local sequence = cc.Sequence:create(action1, callfunc)
+    targetSprite:runAction(sequence)  
+end
 
 
 return AnimationLayer
