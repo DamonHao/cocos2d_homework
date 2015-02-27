@@ -8,6 +8,8 @@ local TAG_LEADING_ROLE = 104
 local TAG_LEADING_ROLE_ATTACK = 105
 local TAG_BOSS = 106
 local TAG_ENEMY_ATTACK = 107
+local TAG_DOUGHBOY = 108
+local s_isEnemy = {[TAG_BOSS]=true, [TAG_DOUGHBOY]=true}
 
 local KEY_UP = cc.KeyCode.KEY_W
 local KEY_RIGHT = cc.KeyCode.KEY_D
@@ -49,8 +51,8 @@ end)
 -- static method. return instance of MainScene, conformed with C++ form
 function AnimationLayer.create()
     local layer = AnimationLayer.new()
+    local schedulerEntry1 = nil
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
-        local schedulerEntry1 = nil
         if event == "enter" then
             layer:onEnter()
             schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
@@ -136,39 +138,13 @@ function AnimationLayer:onEnter()
     cclog("leadingRole contact test", leadingRole:getPhysicsBody():getContactTestBitmask())
        
     self:addChild(leadingRole)
-    
-    -- set up boss 
-    local boss_altas = cc.Sprite:create("roles/boss_atlas.png"):getTexture()
-    local bossForwardFrames = {}
-    for i = 1, 4 do
-        bossForwardFrames[i] = cc.SpriteFrame:createWithTexture(boss_altas, 
-            cc.rect((i-1)*55, 2*77, 55, 77))
-    end
-    local animation2 = cc.Animation:createWithSpriteFrames(bossForwardFrames, 0.15, -1)
-    animCache:addAnimation(animation2,"boss_forward_walk")
-    local boss = cc.Sprite:createWithSpriteFrame(bossForwardFrames[1])
-    boss:setFlippedX(true)
-    boss:setPosition(self.visibleSize.width*4/5, self.visibleSize.height/2)
-    boss:setTag(TAG_BOSS)
-    boss:setPhysicsBody(cc.PhysicsBody:createBox(boss:getContentSize()))
-    local bossBody =  boss:getPhysicsBody()
-    bossBody:setCategoryBitmask(2)
-    bossBody:setContactTestBitmask(4)
-    bossBody:setCollisionBitmask(4)
-    bossBody:getShape(0):setFriction(0)
-    --add run action 
-    local animation = cc.AnimationCache:getInstance():getAnimation("boss_forward_walk")
-    local forward = cc.Animate:create(animation)
-    boss:runAction(forward)
-    local actionManager = cc.Director:getInstance():getActionManager()
-    actionManager:pauseTarget(boss)
-    self:addChild(boss)
-    
-    -- set up 
-    
-    --FIXME setup  blood volume
-   self:setUpBloodVolumeForRoles(leadingRole)
-   self:setUpBloodVolumeForRoles(boss)
+    self:setUpBloodVolumeForRoles(leadingRole)
+
+    -- set up enemy
+    local boss = self:setUpEnemy("roles/boss_atlas.png", TAG_BOSS,
+        {width=55, height=75},{x=self.visibleSize.width*5/7, y= self.visibleSize.height/2})
+    local doughboy = self:setUpEnemy("roles/doughboy_atlas.png", TAG_DOUGHBOY, 
+        {width=55, height=77},{x=self.visibleSize.width*6/7, y= self.visibleSize.height/2})
     
     
     -- Simple AI
@@ -176,6 +152,9 @@ function AnimationLayer:onEnter()
         -- set if condition in case it will pause the action that delete the sprite
         if self:getBloodVolumeInfo(boss).curBlood > 0 then
             self:executeAIForEnemy(boss, leadingRole, "boss_attack")
+        end
+        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
+            self:executeAIForEnemy(doughboy, leadingRole, "boss_attack")
         end
     end
     
@@ -372,20 +351,25 @@ function AnimationLayer:onEnter()
                    dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
                 self:removeChild(dynamicSprite, true)
             end
-        elseif a:getTag() == TAG_BOSS or b:getTag() == TAG_BOSS then
-            local boss, dynamicSprite
+        elseif s_isEnemy[a:getTag()] or s_isEnemy[b:getTag()] then
+            local enemy, dynamicSprite
             if a:getTag() == TAG_BOSS then
-                boss = a 
+                enemy = a 
                 dynamicSprite = b    
             else
-                boss = b 
+                enemy = b 
                 dynamicSprite = a
             end
             if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
                 self:removeChild(dynamicSprite, true)
-                local curBlood = self:changeBloodVolume(boss, -30)
+                local curBlood = 0
+                if enemy:getTag() == TAG_BOSS then
+                    curBlood = self:changeBloodVolume(enemy, -10)
+                elseif  enemy:getTag() == TAG_DOUGHBOY then 
+                    curBlood = self:changeBloodVolume(enemy, -30) 
+                end
                 if curBlood <= 0 then
-                    self:deathEffect(boss)
+                    self:deathEffect(enemy)
                     --cancle the timer in case it will pause the action that delete the sprite
 --                    s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)  
                 end
@@ -605,5 +589,33 @@ function AnimationLayer:deathEffect(targetSprite)
     targetSprite:runAction(sequence)  
 end
 
+function AnimationLayer:setUpEnemy(filePath,spriteTag, spriteSize, intialSpritePosi)
+    local enemy_altas = cc.Sprite:create(filePath):getTexture()
+    local enemyForwardFrames = {}
+    for i = 1, 4 do
+        enemyForwardFrames[i] = cc.SpriteFrame:createWithTexture(enemy_altas, 
+            cc.rect((i-1)*spriteSize.width, 2*spriteSize.height, spriteSize.width, spriteSize.height))
+    end
+    local enemy = cc.Sprite:createWithSpriteFrame(enemyForwardFrames[1])
+    enemy:setFlippedX(true)
+    enemy:setPosition(intialSpritePosi.x, intialSpritePosi.y)
+    enemy:setTag(spriteTag)
+    enemy:setPhysicsBody(cc.PhysicsBody:createBox(enemy:getContentSize()))
+    local enemyBody =  enemy:getPhysicsBody()
+    enemyBody:setRotationEnable(false)
+    enemyBody:setCategoryBitmask(2)
+    enemyBody:setContactTestBitmask(4)
+    enemyBody:setCollisionBitmask(4)
+    enemyBody:getShape(0):setFriction(0)
+    --add run action 
+    local animation = cc.Animation:createWithSpriteFrames(enemyForwardFrames, 0.15, -1)
+    local forward = cc.Animate:create(animation)
+    enemy:runAction(forward)
+    local actionManager = cc.Director:getInstance():getActionManager()
+    actionManager:pauseTarget(enemy)
+    self:addChild(enemy)
+    self:setUpBloodVolumeForRoles(enemy)
+    return enemy
+end
 
 return AnimationLayer
