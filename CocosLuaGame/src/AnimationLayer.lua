@@ -21,7 +21,7 @@ local JUMP_HEIGHT = 150
 local GRAVITY_Y = -400
 local JUMP_UP_SPEED = 350
 local WALK_SPEED = 70
-local ATTACK_SPEED = 100
+local ATTACK_SPEED = 110
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
 local ATTACK_Y_THRESHOLD = 50
 
@@ -37,9 +37,10 @@ local RIGHT_UP = 8
 
 
 local s_scheduler = cc.Director:getInstance():getScheduler()
+local s_schedulerEntry1 = nil
 local s_enemySimpleAI = nil
 local ATTACK_DISTANCE_X = 180
-local ATTACK_DISTANCE_X_FOR_Y = 50
+local ATTACK_DISTANCE_X_FOR_UP = 50
 
 
 require("Helper")
@@ -51,13 +52,13 @@ end)
 -- static method. return instance of MainScene, conformed with C++ form
 function AnimationLayer.create()
     local layer = AnimationLayer.new()
-    local schedulerEntry1 = nil
+--    local schedulerEntry1 = nil
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
         if event == "enter" then
             layer:onEnter()
-            schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
+            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 1.5, false)
         elseif event == "exit" then
-            s_scheduler:unscheduleScriptEntry(schedulerEntry1)
+            s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
         end
     end
     layer:registerScriptHandler(onNodeEvent)
@@ -73,6 +74,7 @@ function AnimationLayer:ctor()
     self.directionKeyNum = 0
     self.isLeadingRoleOnTheGround = true
     self.bloodVolumeTable = {}
+    self.curEnemyNum = 2
 end
 
 function AnimationLayer:onEnter()
@@ -101,7 +103,7 @@ function AnimationLayer:onEnter()
     self:addChild(stone)   
     
     --set up leadingRole
-    local offsetUnit = 80
+    local offsetUnit = 64
     local cache = cc.Director:getInstance():getTextureCache()
     local leading_altas = cc.Sprite:create("roles/leading_role_atlas.png"):getTexture()
     -- cache animation
@@ -123,7 +125,8 @@ function AnimationLayer:onEnter()
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack.png"):getSpriteFrame(),
         "boss_attack")
     
-    local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])  
+    local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])
+--    leadingRole:setScale(0.8, 0.8)  
     leadingRole:setPosition(self.visibleSize.width/5, self.visibleSize.height/2)
     leadingRole:setPhysicsBody(cc.PhysicsBody:createBox(cc.size(
                 leadingRole:getContentSize().width-15,leadingRole:getContentSize().height)))
@@ -161,13 +164,16 @@ function AnimationLayer:onEnter()
     -- keyboard event
     local function onKeyPressed(keyCode, event)
         local targetSprite = event:getCurrentTarget()
+        -- in case the keyboard event will refer to the dead leadingRole and cause error
+        if self:getBloodVolumeInfo(targetSprite).curBlood <= 0 then return end
+        
         local targetBody = targetSprite:getPhysicsBody()
         local pressedKey = self.pressedDirectionKey
---        print(self.directionKeyNum)
         if pressedKey[keyCode] ~= nil then
             pressedKey[keyCode] = true 
             self.directionKeyNum = self.directionKeyNum + 1
         end
+        
         if keyCode == KEY_RIGHT then -- foward move
             targetSprite:setFlippedX(false)
             if self.isLeadingRoleOnTheGround == false then return end
@@ -249,9 +255,12 @@ function AnimationLayer:onEnter()
     end
         
     local function onKeyReleased(keyCode, event)
-        local pressedKey = self.pressedDirectionKey
         local targetSprite = event:getCurrentTarget()
+        -- in case the keyboard event will refer to the dead leadingRole and cause error
+        if self:getBloodVolumeInfo(targetSprite).curBlood <= 0 then return end
+        
         local targetBody = targetSprite:getPhysicsBody()
+        local pressedKey = self.pressedDirectionKey
         if pressedKey[keyCode] then
             if keyCode == KEY_RIGHT and self.isLeadingRoleOnTheGround then
                 if pressedKey[KEY_LEFT] then
@@ -353,7 +362,7 @@ function AnimationLayer:onEnter()
             end
         elseif s_isEnemy[a:getTag()] or s_isEnemy[b:getTag()] then
             local enemy, dynamicSprite
-            if a:getTag() == TAG_BOSS then
+            if s_isEnemy[a:getTag()] then
                 enemy = a 
                 dynamicSprite = b    
             else
@@ -368,8 +377,13 @@ function AnimationLayer:onEnter()
                 elseif  enemy:getTag() == TAG_DOUGHBOY then 
                     curBlood = self:changeBloodVolume(enemy, -30) 
                 end
-                if curBlood <= 0 then
+                if curBlood <= 0 then --FIXME CURRENT
                     self:deathEffect(enemy)
+                    if self.curEnemyNum > 1 then
+                        self.curEnemyNum = self.curEnemyNum - 1
+                    else -- win!
+                        self:showConclusion("Win !")
+                    end
                     --cancle the timer in case it will pause the action that delete the sprite
 --                    s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)  
                 end
@@ -387,7 +401,10 @@ function AnimationLayer:onEnter()
                 self:removeChild(dynamicSprite, true)
                 local curBlood = self:changeBloodVolume(leadingRole, -10)
                 if curBlood <= 0 then
-                    self:deathEffect(leadingRole)  
+                    self:deathEffect(leadingRole)
+                    self:showConclusion("Game Over !")
+                    -- remove enemy AI timer
+                    s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
                 end
             end
         end
@@ -531,6 +548,7 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
         attack:getPhysicsBody():setCollisionBitmask(0)
         attack:setTag(TAG_ENEMY_ATTACK)
         local distance_y_abs = math.abs(leadingRole_y - enemy_y)
+        cclog("dis x: %f, dis y: %f", distance_x_abs, distance_y_abs)
         if distance_y_abs <=  ATTACK_Y_THRESHOLD then
             if distance_x >= 0 then
                 self:setUpAttackForSprite(enemy, attack, RIGHT) 
@@ -538,10 +556,15 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
                 self:setUpAttackForSprite(enemy, attack, LEFT) 
             end              
         else
-            cclog("dis x: %f", distance_x_abs)
             if enemy:getTag() == TAG_BOSS then
-                if distance_x_abs <= ATTACK_DISTANCE_X_FOR_Y then
+                if distance_x_abs <= ATTACK_DISTANCE_X_FOR_UP then
                     self:setUpAttackForSprite(enemy, attack, UP)
+                else
+                    if distance_x >= 0 then
+                        self:setUpAttackForSprite(enemy, attack, RIGHT_UP) 
+                    else
+                        self:setUpAttackForSprite(enemy, attack, LEFT_UP) 
+                    end 
                 end
             end
         end                                                       
@@ -552,6 +575,7 @@ function AnimationLayer:setUpBloodVolumeForRoles(targetSprite)
     local targetSize = targetSprite:getContentSize()
     local bloodBackGround = cc.Sprite:create("roles/blood_background.png")
     bloodBackGround:setPosition(targetSize.width/2 , targetSize.height+10)
+    bloodBackGround:setScale(0.8, 0.6)
     targetSprite:addChild(bloodBackGround)
     local bloodVolume = cc.ProgressTimer:create(cc.Sprite:create("roles/blood_foreground.png"))
     bloodVolume:setType(cc.PROGRESS_TIMER_TYPE_BAR)
@@ -559,6 +583,7 @@ function AnimationLayer:setUpBloodVolumeForRoles(targetSprite)
     bloodVolume:setBarChangeRate(cc.p(1, 0))
     local to1 = cc.ProgressTo:create(0, 100)
     bloodVolume:runAction(to1)
+    bloodVolume:setScale(0.8, 0.6)
     bloodVolume:setPosition(targetSize.width/2 , targetSize.height+10)
     targetSprite:addChild(bloodVolume)
     self.bloodVolumeTable[targetSprite] = {["progressTimer"] = bloodVolume, ["curBlood"] = 100}
@@ -579,6 +604,7 @@ end
 
 function AnimationLayer:deathEffect(targetSprite)
 --    targetSprite:getPhysicsBody():setDynamic(false)
+    targetSprite:getPhysicsBody():setContactTestBitmask(1)
     targetSprite:stopAllActions()
     local action1 = cc.Blink:create(1, 3)
     local function deleteSprite()
@@ -616,6 +642,15 @@ function AnimationLayer:setUpEnemy(filePath,spriteTag, spriteSize, intialSpriteP
     self:addChild(enemy)
     self:setUpBloodVolumeForRoles(enemy)
     return enemy
+end
+
+function AnimationLayer:showConclusion(wordStr)
+    local label = cc.LabelBMFont:create(wordStr, "fonts/bitmapFontTest.fnt")
+    label:setPosition(cc.p(self.visibleSize.width/2, self.visibleSize.height/2+20) )
+    label:setAnchorPoint(cc.p(0.5, 0.5))
+    local scale = cc.ScaleBy:create(2, 1.5)
+    label:runAction(scale)
+    self:addChild(label)
 end
 
 return AnimationLayer
