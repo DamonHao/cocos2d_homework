@@ -9,7 +9,9 @@ local TAG_LEADING_ROLE_ATTACK = 105
 local TAG_BOSS = 106
 local TAG_ENEMY_ATTACK = 107
 local TAG_DOUGHBOY = 108
+local TAG_MAP_STONE = 109
 local s_isEnemy = {[TAG_BOSS]=true, [TAG_DOUGHBOY]=true}
+local s_isMap = {[TAG_MAP] = true, [TAG_MAP_STONE] = true}
 
 local KEY_UP = cc.KeyCode.KEY_W
 local KEY_RIGHT = cc.KeyCode.KEY_D
@@ -19,7 +21,7 @@ local KEY_JUMP = cc.KeyCode.KEY_J
 local KEY_ATTACK = cc.KeyCode.KEY_K
 local JUMP_HEIGHT = 150
 local GRAVITY_Y = -400
-local JUMP_UP_SPEED = 350
+local JUMP_UP_SPEED = 360
 local WALK_SPEED = 70
 local ATTACK_SPEED = 110
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
@@ -56,7 +58,7 @@ function AnimationLayer.create()
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
         if event == "enter" then
             layer:onEnter()
-            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 1.5, false)
+            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
         elseif event == "exit" then
             s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
         end
@@ -80,7 +82,7 @@ end
 function AnimationLayer:onEnter()
     -- Physics debug mode
     local physicsWorld = cc.Director:getInstance():getRunningScene():getPhysicsWorld()
-    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
+--    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
     physicsWorld:setGravity(cc.p(0, GRAVITY_Y))
     cclog("world gravity: %f", physicsWorld:getGravity().y)
     -- create world edge
@@ -93,11 +95,11 @@ function AnimationLayer:onEnter()
     self:addChild(nodeForWorldEdge)
        
     local stone = cc.Sprite:create("maps/stone.png")
-    stone:setPosition(self.visibleSize.width/2, 120)
+    stone:setPosition(self.visibleSize.width/2, 140)
     stone:setPhysicsBody(cc.PhysicsBody:createBox(stone:getContentSize()))
     stone:getPhysicsBody():setDynamic(false)
     stone:getPhysicsBody():setContactTestBitmask(ALL_BIT_ONE)
-    stone:setTag(TAG_MAP)
+    stone:setTag(TAG_MAP_STONE)
     cclog("stonde category:%d", stone:getPhysicsBody():getCategoryBitmask())
     cclog("stonde contact test:%d", stone:getPhysicsBody():getContactTestBitmask())
     self:addChild(stone)   
@@ -122,8 +124,15 @@ function AnimationLayer:onEnter()
 
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
         "leading_role_attack")
-    frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack.png"):getSpriteFrame(),
-        "boss_attack")
+    frameCache:addSpriteFrame(cc.Sprite:create("attacks/enemy_attack.png"):getSpriteFrame(),
+        "enemy_attack")
+--    frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack.png"):getSpriteFrame(),
+--        "boss_attack")
+    local bossAttack_texture = cc.Sprite:create("attacks/boss_attack.png"):getTexture()
+    local bossAttack_frame = cc.SpriteFrame:createWithTexture(bossAttack_texture, 
+                             cc.rect(40, 0, 30, 60) )
+    frameCache:addSpriteFrame(bossAttack_frame, "boss_attack")
+        
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])
 --    leadingRole:setScale(0.8, 0.8)  
@@ -138,7 +147,7 @@ function AnimationLayer:onEnter()
     leadingRole:setAnchorPoint(0.5, 0.5)
     leadingRole:getPhysicsBody():getShape(0):setFriction(0)
     cclog("leadingRole category:%d", leadingRole:getPhysicsBody():getCategoryBitmask())
-    cclog("leadingRole contact test", leadingRole:getPhysicsBody():getContactTestBitmask())
+    cclog("leadingRole contact test:%d", leadingRole:getPhysicsBody():getContactTestBitmask())
        
     self:addChild(leadingRole)
     self:setUpBloodVolumeForRoles(leadingRole)
@@ -156,9 +165,9 @@ function AnimationLayer:onEnter()
         if self:getBloodVolumeInfo(boss).curBlood > 0 then
             self:executeAIForEnemy(boss, leadingRole, "boss_attack")
         end
-        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
-            self:executeAIForEnemy(doughboy, leadingRole, "boss_attack")
-        end
+--        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
+--            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
+--        end
     end
     
     -- keyboard event
@@ -213,13 +222,14 @@ function AnimationLayer:onEnter()
             local attack = cc.Sprite:createWithSpriteFrame(
                            cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
             attack:setPhysicsBody(cc.PhysicsBody:createBox(
-                   cc.size(attack:getContentSize().width , attack:getContentSize().height)))
-            attack:getPhysicsBody():setGravityEnable(false)
+                   cc.size(attack:getContentSize().width-10, attack:getContentSize().height-10)))
             attack:getPhysicsBody():setCategoryBitmask(4)
             attack:getPhysicsBody():setContactTestBitmask(2)
-            attack:getPhysicsBody():setCollisionBitmask(0)
+--            attack:getPhysicsBody():setGravityEnable(false)
+--            attack:getPhysicsBody():setCollisionBitmask(0)
             attack:setTag(TAG_LEADING_ROLE_ATTACK)
-
+            cclog("leadingRole Attack category:%d", attack:getPhysicsBody():getCategoryBitmask())
+            cclog("leadingRole Attack contact test:%d", attack:getPhysicsBody():getContactTestBitmask())
             local function rightOrLeftAttack()
                 if targetSprite:isFlippedX() then
                     self:setUpAttackForSprite(targetSprite, attack, LEFT)
@@ -303,12 +313,12 @@ function AnimationLayer:onEnter()
         local a = contact:getShapeA():getBody():getNode()
         local b = contact:getShapeB():getBody():getNode()
         cclog("contact in a tag: %d, b tag: %d", a:getTag(), b:getTag()) 
-        if a:getTag() == TAG_MAP or b:getTag() == TAG_MAP then
+        if s_isMap[a:getTag()] or s_isMap[b:getTag()] then
             local map, dynamicSprite
             local isSwapped = false
-            if a:getTag() == TAG_MAP then
+            if s_isMap[a:getTag()] then
                 map = a 
-                dynamicSprite = b    
+                dynamicSprite = b   
             else
                 map = b 
                 dynamicSprite = a
@@ -358,7 +368,9 @@ function AnimationLayer:onEnter()
                 cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
             elseif dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK or 
                    dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
-                self:removeChild(dynamicSprite, true)
+                if map:getTag() == TAG_MAP then
+                    self:removeChild(dynamicSprite, true)
+                end
             end
         elseif s_isEnemy[a:getTag()] or s_isEnemy[b:getTag()] then
             local enemy, dynamicSprite
@@ -455,7 +467,9 @@ function AnimationLayer:onEnter()
     
 end
 
-function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum) 
+-- For leadingRole and enemy
+function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)
+    attack:getPhysicsBody():setCollisionBitmask(0) 
     attack:getPhysicsBody():setGravityEnable(false)
     local lead_x, lead_y = targetSprite:getPosition()
     local leadSize = targetSprite:getContentSize()
@@ -516,6 +530,7 @@ function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)
     self:addChild(attack) 
 end
 
+-- enemy AI
 function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameName) 
     local enemyBody = enemy:getPhysicsBody()
     local leadingRole_x, leadingRole_y = leadingRole:getPosition()
@@ -542,10 +557,9 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
         local attack = cc.Sprite:createWithSpriteFrame(
             cc.SpriteFrameCache:getInstance():getSpriteFrame(attackSpriteFrameName))
         attack:setPhysicsBody(cc.PhysicsBody:createBox(
-            cc.size(attack:getContentSize().width , attack:getContentSize().height)))
+            cc.size(attack:getContentSize().width-10 , attack:getContentSize().height-10)))
         attack:getPhysicsBody():setCategoryBitmask(8)
         attack:getPhysicsBody():setContactTestBitmask(1)
-        attack:getPhysicsBody():setCollisionBitmask(0)
         attack:setTag(TAG_ENEMY_ATTACK)
         local distance_y_abs = math.abs(leadingRole_y - enemy_y)
         cclog("dis x: %f, dis y: %f", distance_x_abs, distance_y_abs)
@@ -641,6 +655,8 @@ function AnimationLayer:setUpEnemy(filePath,spriteTag, spriteSize, intialSpriteP
     actionManager:pauseTarget(enemy)
     self:addChild(enemy)
     self:setUpBloodVolumeForRoles(enemy)
+    cclog("enemy category:%d", enemyBody:getCategoryBitmask())
+    cclog("enemy contact test:%d", enemyBody:getContactTestBitmask())
     return enemy
 end
 
