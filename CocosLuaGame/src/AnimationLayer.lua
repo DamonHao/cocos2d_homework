@@ -82,7 +82,7 @@ end
 function AnimationLayer:onEnter()
     -- Physics debug mode
     local physicsWorld = cc.Director:getInstance():getRunningScene():getPhysicsWorld()
---    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
+    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
     physicsWorld:setGravity(cc.p(0, GRAVITY_Y))
     cclog("world gravity: %f", physicsWorld:getGravity().y)
     -- create world edge
@@ -126,11 +126,11 @@ function AnimationLayer:onEnter()
         "leading_role_attack")
     frameCache:addSpriteFrame(cc.Sprite:create("attacks/enemy_attack.png"):getSpriteFrame(),
         "enemy_attack")
---    frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack.png"):getSpriteFrame(),
+--    frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack_1.png"):getSpriteFrame(),
 --        "boss_attack")
-    local bossAttack_texture = cc.Sprite:create("attacks/boss_attack.png"):getTexture()
+    local bossAttack_texture = cc.Sprite:create("attacks/boss_attack_1.png"):getTexture()
     local bossAttack_frame = cc.SpriteFrame:createWithTexture(bossAttack_texture, 
-                             cc.rect(40, 0, 30, 60) )
+                             cc.rect(12, 2, 40, 56) )
     frameCache:addSpriteFrame(bossAttack_frame, "boss_attack")
         
     
@@ -162,9 +162,9 @@ function AnimationLayer:onEnter()
     -- Simple AI
     s_enemySimpleAI = function ()  --FIXME Simple AI
         -- set if condition in case it will pause the action that delete the sprite
-        if self:getBloodVolumeInfo(boss).curBlood > 0 then
-            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
-        end
+--        if self:getBloodVolumeInfo(boss).curBlood > 0 then
+--            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
+--        end
 --        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
 --            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
 --        end
@@ -427,11 +427,11 @@ function AnimationLayer:onEnter()
         local a = contact:getShapeA():getBody():getNode()
         local b = contact:getShapeB():getBody():getNode()
         if a == nil or b == nil then return end
-        if a:getTag() == TAG_MAP or b:getTag() == TAG_MAP then
+        if s_isMap[a:getTag()] or s_isMap[b:getTag()] then
             local map, dynamicSprite
             local isSwapped = false
             cclog("contact end")
-            if a:getTag() == TAG_MAP then
+            if s_isMap[a:getTag()] then
                 map = a 
                 dynamicSprite = b    
             else
