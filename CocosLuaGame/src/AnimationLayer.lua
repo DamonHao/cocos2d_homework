@@ -43,6 +43,7 @@ local s_schedulerEntry1 = nil
 local s_enemySimpleAI = nil
 local ATTACK_DISTANCE_X = 180
 local ATTACK_DISTANCE_X_FOR_UP = 50
+local s_simpleAudioEngine = cc.SimpleAudioEngine:getInstance()
 
 
 require("Helper")
@@ -80,6 +81,14 @@ function AnimationLayer:ctor()
 end
 
 function AnimationLayer:onEnter()
+    -- set up audio
+--    s_simpleAudioEngine:preloadMusic("audio/main_backgroud.mp3")
+    -- backgroud music
+    s_simpleAudioEngine:playMusic("audio/main_backgroud.mp3", true)
+    
+    s_simpleAudioEngine:preloadEffect("audio/jump.mp3")
+    s_simpleAudioEngine:preloadEffect("audio/attack.wav")
+   
     -- Physics debug mode
     local physicsWorld = cc.Director:getInstance():getRunningScene():getPhysicsWorld()
     physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
@@ -217,7 +226,7 @@ function AnimationLayer:onEnter()
             targetSprite:stopAllActions() -- stop all action
             targetSprite:getPhysicsBody():applyImpulse(cc.p(0, 
                          JUMP_UP_SPEED* targetSprite:getPhysicsBody():getMass()))
-                         
+            s_simpleAudioEngine:playEffect("audio/jump.mp3", false)                       
         elseif keyCode == KEY_ATTACK then -- attack
             local attack = cc.Sprite:createWithSpriteFrame(
                            cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
@@ -389,7 +398,7 @@ function AnimationLayer:onEnter()
                 elseif  enemy:getTag() == TAG_DOUGHBOY then 
                     curBlood = self:changeBloodVolume(enemy, -30) 
                 end
-                if curBlood <= 0 then --FIXME CURRENT
+                if curBlood <= 0 then --FIXME add end event
                     self:deathEffect(enemy)
                     if self.curEnemyNum > 1 then
                         self.curEnemyNum = self.curEnemyNum - 1
@@ -527,6 +536,7 @@ function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)
     end
     attack:getPhysicsBody():setVelocity(velocity) 
     attack:setPosition(attackPosi)
+    s_simpleAudioEngine:playEffect("audio/attack.wav", false)
     self:addChild(attack) 
 end
 
