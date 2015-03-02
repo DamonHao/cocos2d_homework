@@ -88,10 +88,13 @@ function AnimationLayer:onEnter()
     
     s_simpleAudioEngine:preloadEffect("audio/jump.mp3")
     s_simpleAudioEngine:preloadEffect("audio/attack.wav")
+    s_simpleAudioEngine:preloadEffect("audio/attack_hit.mp3")
+    s_simpleAudioEngine:preloadEffect("audio/game_win.mp3")
+    s_simpleAudioEngine:preloadEffect("audio/game_over.mp3")
    
     -- Physics debug mode
     local physicsWorld = cc.Director:getInstance():getRunningScene():getPhysicsWorld()
-    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
+--    physicsWorld:setDebugDrawMask(cc.PhysicsWorld.DEBUGDRAW_ALL)
     physicsWorld:setGravity(cc.p(0, GRAVITY_Y))
     cclog("world gravity: %f", physicsWorld:getGravity().y)
     -- create world edge
@@ -171,9 +174,9 @@ function AnimationLayer:onEnter()
     -- Simple AI
     s_enemySimpleAI = function ()  --FIXME Simple AI
         -- set if condition in case it will pause the action that delete the sprite
---        if self:getBloodVolumeInfo(boss).curBlood > 0 then
---            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
---        end
+        if self:getBloodVolumeInfo(boss).curBlood > 0 then
+            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
+        end
 --        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
 --            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
 --        end
@@ -391,12 +394,13 @@ function AnimationLayer:onEnter()
                 dynamicSprite = a
             end
             if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
+                s_simpleAudioEngine:playEffect("audio/attack_hit.mp3", false)
                 self:removeChild(dynamicSprite, true)
                 local curBlood = 0
                 if enemy:getTag() == TAG_BOSS then
                     curBlood = self:changeBloodVolume(enemy, -10)
                 elseif  enemy:getTag() == TAG_DOUGHBOY then 
-                    curBlood = self:changeBloodVolume(enemy, -30) 
+                    curBlood = self:changeBloodVolume(enemy, -15) 
                 end
                 if curBlood <= 0 then --FIXME add end event
                     self:deathEffect(enemy)
@@ -404,6 +408,9 @@ function AnimationLayer:onEnter()
                         self.curEnemyNum = self.curEnemyNum - 1
                     else -- win!
                         self:showConclusion("Win !")
+                        s_simpleAudioEngine:stopMusic()
+                        s_simpleAudioEngine:playEffect("audio/game_win.mp3", false)
+                        
                     end
                     --cancle the timer in case it will pause the action that delete the sprite
 --                    s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)  
@@ -419,6 +426,7 @@ function AnimationLayer:onEnter()
                 dynamicSprite = a
             end
             if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then --FIXME add audio
+                s_simpleAudioEngine:playEffect("audio/attack_hit.mp3", false)
                 self:removeChild(dynamicSprite, true)
                 local curBlood = self:changeBloodVolume(leadingRole, -10)
                 if curBlood <= 0 then
@@ -426,6 +434,9 @@ function AnimationLayer:onEnter()
                     self:showConclusion("Game Over !")
                     -- remove enemy AI timer
                     s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
+                    
+                    s_simpleAudioEngine:stopMusic()
+                    s_simpleAudioEngine:playEffect("audio/game_over.mp3", false)
                 end
             end
         end
