@@ -44,6 +44,8 @@ local s_enemySimpleAI = nil
 local ATTACK_DISTANCE_X = 180
 local ATTACK_DISTANCE_X_FOR_UP = 50
 local s_simpleAudioEngine = cc.SimpleAudioEngine:getInstance()
+-- cache sprite frame
+local s_frameCache = cc.SpriteFrameCache:getInstance()
 
 
 require("Helper")
@@ -98,6 +100,7 @@ function AnimationLayer:onEnter()
     physicsWorld:setGravity(cc.p(0, GRAVITY_Y))
     cclog("world gravity: %f", physicsWorld:getGravity().y)
     -- create world edge
+    cclog("visibleSize width:%d, height:%d", self.visibleSize.width, self.visibleSize.height)
     local nodeForWorldEdge = cc.Node:create()
     nodeForWorldEdge:setPhysicsBody(cc.PhysicsBody:createEdgeBox(cc.size(self.visibleSize.width, self.visibleSize.height)))
     nodeForWorldEdge:setPosition(self.visibleSize.width/2, self.visibleSize.height/2)
@@ -105,7 +108,11 @@ function AnimationLayer:onEnter()
     nodeForWorldEdge:getPhysicsBody():setContactTestBitmask(ALL_BIT_ONE)
     nodeForWorldEdge:setTag(TAG_MAP)
     self:addChild(nodeForWorldEdge)
-       
+    
+    local mapBackground = cc.Sprite:create("maps/map_background.png")
+    mapBackground:setPosition(self.visibleSize.width/2, self.visibleSize.height/2) 
+    self:addChild(mapBackground, -10)
+    
     local stone = cc.Sprite:create("maps/stone.png")
     stone:setPosition(self.visibleSize.width/2, 140)
     stone:setPhysicsBody(cc.PhysicsBody:createBox(stone:getContentSize()))
@@ -131,19 +138,20 @@ function AnimationLayer:onEnter()
     local animation1 = cc.Animation:createWithSpriteFrames(forwardFrames, 0.15, -1)
     animCache:addAnimation(animation1,"leadingRole_forward_walk") 
     
-    -- cache sprite frame
-    local frameCache = cc.SpriteFrameCache:getInstance()
+   
 
-    frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
+    s_frameCache:addSpriteFrame(forwardFrames[1], "leadingRole_stand")
+    s_frameCache:addSpriteFrame(forwardFrames[2],"leadingRole_jump")
+    s_frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
         "leading_role_attack")
-    frameCache:addSpriteFrame(cc.Sprite:create("attacks/enemy_attack.png"):getSpriteFrame(),
+    s_frameCache:addSpriteFrame(cc.Sprite:create("attacks/enemy_attack.png"):getSpriteFrame(),
         "enemy_attack")
---    frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack_1.png"):getSpriteFrame(),
+--    s_frameCache:addSpriteFrame(cc.Sprite:create("attacks/boss_attack_1.png"):getSpriteFrame(),
 --        "boss_attack")
     local bossAttack_texture = cc.Sprite:create("attacks/boss_attack_1.png"):getTexture()
     local bossAttack_frame = cc.SpriteFrame:createWithTexture(bossAttack_texture, 
                              cc.rect(12, 2, 40, 56) )
-    frameCache:addSpriteFrame(bossAttack_frame, "boss_attack")
+    s_frameCache:addSpriteFrame(bossAttack_frame, "boss_attack")
         
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])
@@ -158,6 +166,7 @@ function AnimationLayer:onEnter()
     leadingRole:setTag(TAG_LEADING_ROLE)
     leadingRole:setAnchorPoint(0.5, 0.5)
     leadingRole:getPhysicsBody():getShape(0):setFriction(0)
+--    leadingRole:setSpriteFrame(cc.SpriteFrame)
     cclog("leadingRole category:%d", leadingRole:getPhysicsBody():getCategoryBitmask())
     cclog("leadingRole contact test:%d", leadingRole:getPhysicsBody():getContactTestBitmask())
        
@@ -226,13 +235,13 @@ function AnimationLayer:onEnter()
             local jump = cc.JumpBy:create(0.5, cc.p(0, 0), JUMP_HEIGHT, 1)
             targetSprite:runAction(jump)
         elseif keyCode == KEY_JUMP and self.isLeadingRoleOnTheGround then -- jump
+            targetSprite:setSpriteFrame(s_frameCache:getSpriteFrame("leadingRole_jump"))
             targetSprite:stopAllActions() -- stop all action
             targetSprite:getPhysicsBody():applyImpulse(cc.p(0, 
                          JUMP_UP_SPEED* targetSprite:getPhysicsBody():getMass()))
             s_simpleAudioEngine:playEffect("audio/jump.mp3", false)                       
         elseif keyCode == KEY_ATTACK then -- attack
-            local attack = cc.Sprite:createWithSpriteFrame(
-                           cc.SpriteFrameCache:getInstance():getSpriteFrame("leading_role_attack"))
+            local attack = cc.Sprite:createWithSpriteFrame(s_frameCache:getSpriteFrame("leading_role_attack"))
             attack:setPhysicsBody(cc.PhysicsBody:createBox(
                    cc.size(attack:getContentSize().width-10, attack:getContentSize().height-10)))
             attack:getPhysicsBody():setCategoryBitmask(4)
@@ -345,10 +354,11 @@ function AnimationLayer:onEnter()
                 if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then -- vertical touch
                     if isSwapped then -- set the normal emit from map
                         contactNormal.y = -1 * contactNormal.y 
-                end
-                cclog("onContactBegin current normal y: %f",  contactNormal.y)
-                if contactNormal.y >= 0.1 then -- touch the ground
-                    self.isLeadingRoleOnTheGround = true
+                    end
+                    cclog("onContactBegin current normal y: %f",  contactNormal.y)
+                    if contactNormal.y >= 0.1 then -- touch the ground
+                        self.isLeadingRoleOnTheGround = true
+                        dynamicSprite:setSpriteFrame(s_frameCache:getSpriteFrame("leadingRole_stand"))
                         local velocity_x = 0
                         local pressedKey = self.pressedDirectionKey
                         if pressedKey[KEY_RIGHT] and pressedKey[KEY_LEFT] then
