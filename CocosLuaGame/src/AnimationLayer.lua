@@ -61,9 +61,9 @@ function AnimationLayer.create()
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
         if event == "enter" then
             layer:onEnter()
-            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
+--            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
         elseif event == "exit" then
-            s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
+--            s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
         end
     end
     layer:registerScriptHandler(onNodeEvent)
@@ -103,18 +103,20 @@ function AnimationLayer:onEnter()
     cclog("visibleSize width:%d, height:%d", self.visibleSize.width, self.visibleSize.height)
     local nodeForWorldEdge = cc.Node:create()
     nodeForWorldEdge:setPhysicsBody(cc.PhysicsBody:createEdgeBox(cc.size(self.visibleSize.width, self.visibleSize.height)))
-    nodeForWorldEdge:setPosition(self.visibleSize.width/2, self.visibleSize.height/2)
+    nodeForWorldEdge:setPosition(self.visibleSize.width/2, self.visibleSize.height/2+10)
     nodeForWorldEdge:getPhysicsBody():setDynamic(false)
     nodeForWorldEdge:getPhysicsBody():setContactTestBitmask(ALL_BIT_ONE)
     nodeForWorldEdge:setTag(TAG_MAP)
     self:addChild(nodeForWorldEdge)
     
     local mapBackground = cc.Sprite:create("maps/map_background.png")
-    mapBackground:setPosition(self.visibleSize.width/2, self.visibleSize.height/2) 
+    local SCALE_FACTOR = 0.7
+    mapBackground:setScale(SCALE_FACTOR, SCALE_FACTOR)
+    mapBackground:setPosition(self.visibleSize.width/2, self.visibleSize.height/2-30) 
     self:addChild(mapBackground, -10)
     
     local stone = cc.Sprite:create("maps/stone.png")
-    stone:setPosition(self.visibleSize.width/2, 140)
+    stone:setPosition(self.visibleSize.width/2, 150)
     stone:setPhysicsBody(cc.PhysicsBody:createBox(stone:getContentSize()))
     stone:getPhysicsBody():setDynamic(false)
     stone:getPhysicsBody():setContactTestBitmask(ALL_BIT_ONE)
@@ -693,7 +695,7 @@ end
 
 function AnimationLayer:showConclusion(wordStr)
     local label = cc.LabelBMFont:create(wordStr, "fonts/bitmapFontTest.fnt")
-    label:setPosition(cc.p(self.visibleSize.width/2, self.visibleSize.height/2+20) )
+    label:setPosition(cc.p(self.visibleSize.width/2, self.visibleSize.height/2+30) )
     label:setAnchorPoint(cc.p(0.5, 0.5))
     local scale = cc.ScaleBy:create(2, 1.5)
     label:runAction(scale)
