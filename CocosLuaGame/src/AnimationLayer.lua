@@ -37,12 +37,14 @@ local LEFT_DOWN = 6
 local LEFT_UP = 7
 local RIGHT_UP = 8
 
-
+-- 
 local s_scheduler = cc.Director:getInstance():getScheduler()
 local s_schedulerEntry1 = nil
 local s_enemySimpleAI = nil
-local ATTACK_DISTANCE_X = 180
+local ATTACK_DISTANCE_X = 170
 local ATTACK_DISTANCE_X_FOR_UP = 50
+local ENEMY_JUMP_THRESHOLD = 4
+
 local s_simpleAudioEngine = cc.SimpleAudioEngine:getInstance()
 -- cache sprite frame
 local s_frameCache = cc.SpriteFrameCache:getInstance()
@@ -61,9 +63,9 @@ function AnimationLayer.create()
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
         if event == "enter" then
             layer:onEnter()
---            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
+            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
         elseif event == "exit" then
---            s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
+            s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
         end
     end
     layer:registerScriptHandler(onNodeEvent)
@@ -87,7 +89,7 @@ function AnimationLayer:onEnter()
 --    s_simpleAudioEngine:preloadMusic("audio/main_backgroud.mp3")
     -- backgroud music
     s_simpleAudioEngine:playMusic("audio/main_backgroud.mp3", true)
-    
+    -- effect music
     s_simpleAudioEngine:preloadEffect("audio/jump.mp3")
     s_simpleAudioEngine:preloadEffect("audio/attack.wav")
     s_simpleAudioEngine:preloadEffect("audio/attack_hit.mp3")
@@ -140,8 +142,6 @@ function AnimationLayer:onEnter()
     local animation1 = cc.Animation:createWithSpriteFrames(forwardFrames, 0.15, -1)
     animCache:addAnimation(animation1,"leadingRole_forward_walk") 
     
-   
-
     s_frameCache:addSpriteFrame(forwardFrames[1], "leadingRole_stand")
     s_frameCache:addSpriteFrame(forwardFrames[2],"leadingRole_jump")
     s_frameCache:addSpriteFrame(cc.Sprite:create("attacks/leading_role_attack.png"):getSpriteFrame(),
@@ -158,7 +158,7 @@ function AnimationLayer:onEnter()
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])
 --    leadingRole:setScale(0.8, 0.8)  
-    leadingRole:setPosition(self.visibleSize.width/5, self.visibleSize.height/2)
+    leadingRole:setPosition(self.visibleSize.width/5, leadingRole:getContentSize().height/2+ 15)
     leadingRole:setPhysicsBody(cc.PhysicsBody:createBox(cc.size(
                 leadingRole:getContentSize().width-15,leadingRole:getContentSize().height)))
     leadingRole:getPhysicsBody():setRotationEnable(false)
@@ -166,9 +166,8 @@ function AnimationLayer:onEnter()
     leadingRole:getPhysicsBody():setContactTestBitmask(8)
     leadingRole:getPhysicsBody():setCollisionBitmask(1)
     leadingRole:setTag(TAG_LEADING_ROLE)
-    leadingRole:setAnchorPoint(0.5, 0.5)
+--    leadingRole:setAnchorPoint(0.5, 0.5)
     leadingRole:getPhysicsBody():getShape(0):setFriction(0)
---    leadingRole:setSpriteFrame(cc.SpriteFrame)
     cclog("leadingRole category:%d", leadingRole:getPhysicsBody():getCategoryBitmask())
     cclog("leadingRole contact test:%d", leadingRole:getPhysicsBody():getContactTestBitmask())
        
@@ -177,9 +176,9 @@ function AnimationLayer:onEnter()
 
     -- set up enemy
     local boss = self:setUpEnemy("roles/boss_atlas.png", TAG_BOSS,
-        {width=55, height=75},{x=self.visibleSize.width*5/7, y= self.visibleSize.height/2})
+        {width=55, height=75},{x=self.visibleSize.width*6/7, y= 50})
     local doughboy = self:setUpEnemy("roles/doughboy_atlas.png", TAG_DOUGHBOY, 
-        {width=55, height=77},{x=self.visibleSize.width*6/7, y= self.visibleSize.height/2})
+        {width=55, height=77},{x=self.visibleSize.width*5/7, y= 50})
     
     
     -- Simple AI
@@ -188,9 +187,9 @@ function AnimationLayer:onEnter()
         if self:getBloodVolumeInfo(boss).curBlood > 0 then
             self:executeAIForEnemy(boss, leadingRole, "boss_attack")
         end
---        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
---            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
---        end
+        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
+            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
+        end
     end
     
     -- keyboard event
@@ -391,9 +390,27 @@ function AnimationLayer:onEnter()
                 velocity = dynamicSprite:getPhysicsBody():getVelocity()
                 cclog("velocity after contact x, y: %f, %f", velocity.x, velocity.y)
             elseif dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK or 
-                   dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
+                   dynamicSprite:getTag() == TAG_ENEMY_ATTACK then -- attack
                 if map:getTag() == TAG_MAP then
                     self:removeChild(dynamicSprite, true)
+                end
+            elseif s_isEnemy[dynamicSprite:getTag()] then -- enemy
+                local contactNormal = contact:getContactData().normal
+                local dynamicSpriteBody = dynamicSprite:getPhysicsBody()
+                local velocity = dynamicSpriteBody:getVelocity()
+                if contactNormal.y >= 0.1 or contactNormal.y <= -0.1 then -- vertical touch
+                    if isSwapped then -- set the normal emit from map
+                        contactNormal.y = -1 * contactNormal.y 
+                    end
+                    if contactNormal.y >= 0.1 then -- touch the ground
+                        dynamicSprite:setSpriteFrame(s_frameCache:getSpriteFrame(
+                                  tostring(dynamicSprite:getTag()) .. "_stand"))
+                        dynamicSpriteBody:setVelocity(cc.p(0, 0))
+                    else -- touch the roof
+                        dynamicSpriteBody:setVelocity(cc.p(velocity.x, -0.2*velocity.y))
+                    end   
+                else -- horizontal touch
+                    dynamicSpriteBody:setVelocity(cc.p(0, velocity.y))
                 end
             end
         elseif s_isEnemy[a:getTag()] or s_isEnemy[b:getTag()] then
@@ -437,10 +454,11 @@ function AnimationLayer:onEnter()
                 leadingRole = b 
                 dynamicSprite = a
             end
-            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then --FIXME add audio
+            if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
                 s_simpleAudioEngine:playEffect("audio/attack_hit.mp3", false)
                 self:removeChild(dynamicSprite, true)
-                local curBlood = self:changeBloodVolume(leadingRole, -10)
+--                local curBlood = self:changeBloodVolume(leadingRole, -10)
+                local curBlood = 100 --FIXME FOR TEST
                 if curBlood <= 0 then
                     self:deathEffect(leadingRole)
                     self:showConclusion("Game Over !")
@@ -564,7 +582,7 @@ function AnimationLayer:setUpAttackForSprite(targetSprite, attack, directoinNum)
 end
 
 -- enemy AI
-function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameName) 
+function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameName) --FIXME CURRENT
     local enemyBody = enemy:getPhysicsBody()
     local leadingRole_x, leadingRole_y = leadingRole:getPosition()
     local enemy_x, enemy_y = enemy:getPosition()
@@ -577,13 +595,26 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
         enemy:setFlippedX(true)
     end
     if distance_x_abs > ATTACK_DISTANCE_X then -- move closer
-        actionManager:resumeTarget(enemy)
+        local randomNum = math.random(1, 10)
         if distance_x >= 0 then
-            enemyBody:setVelocity(cc.p(WALK_SPEED, 0))
+            if randomNum > ENEMY_JUMP_THRESHOLD then -- jump
+                actionManager:pauseTarget(enemy)
+                enemyBody:setVelocity(cc.p(WALK_SPEED, JUMP_UP_SPEED))
+                enemy:setSpriteFrame(s_frameCache:getSpriteFrame( tostring(enemy:getTag()) .. "_jump"))
+            else
+                enemyBody:setVelocity(cc.p(WALK_SPEED, 0))
+                actionManager:resumeTarget(enemy)
+            end
         else
-            enemyBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
-        end  
-        
+            if randomNum > ENEMY_JUMP_THRESHOLD then -- jump
+                actionManager:pauseTarget(enemy)
+                enemyBody:setVelocity(cc.p(-1*WALK_SPEED, JUMP_UP_SPEED))
+                enemy:setSpriteFrame(s_frameCache:getSpriteFrame( tostring(enemy:getTag()) .. "_jump"))
+            else
+                enemyBody:setVelocity(cc.p(-1*WALK_SPEED, 0))
+                actionManager:resumeTarget(enemy)
+            end
+        end
     else -- attack 
         enemyBody:setVelocity(cc.p(0, 0))
         actionManager:pauseTarget(enemy)
@@ -596,24 +627,38 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
         attack:setTag(TAG_ENEMY_ATTACK)
         local distance_y_abs = math.abs(leadingRole_y - enemy_y)
         cclog("dis x: %f, dis y: %f", distance_x_abs, distance_y_abs)
-        if distance_y_abs <=  ATTACK_Y_THRESHOLD then
+        if distance_y_abs <=  ATTACK_Y_THRESHOLD then  -- vertical attack
             if distance_x >= 0 then
                 self:setUpAttackForSprite(enemy, attack, RIGHT) 
             else
                 self:setUpAttackForSprite(enemy, attack, LEFT) 
             end              
         else
-            if enemy:getTag() == TAG_BOSS then
+--            if enemy:getTag() == TAG_BOSS then
+                local distance_y = leadingRole_y - enemy_y
                 if distance_x_abs <= ATTACK_DISTANCE_X_FOR_UP then
-                    self:setUpAttackForSprite(enemy, attack, UP)
+                    if distance_y > 0 then
+                        self:setUpAttackForSprite(enemy, attack, UP)
+                    else
+                        self:setUpAttackForSprite(enemy, attack, DOWN)
+                    end
                 else
                     if distance_x >= 0 then
-                        self:setUpAttackForSprite(enemy, attack, RIGHT_UP) 
+                        if distance_y > 0 then
+                            self:setUpAttackForSprite(enemy, attack, RIGHT_UP) 
+                        else
+                            self:setUpAttackForSprite(enemy, attack, RIGHT_DOWN)
+                        end
                     else
-                        self:setUpAttackForSprite(enemy, attack, LEFT_UP) 
+                        if distance_y > 0 then
+                            self:setUpAttackForSprite(enemy, attack, LEFT_UP) 
+                        else
+                            self:setUpAttackForSprite(enemy, attack, LEFT_DOWN)
+                        end
+                        
                     end 
                 end
-            end
+--            end
         end                                                       
     end
 end
@@ -669,7 +714,9 @@ function AnimationLayer:setUpEnemy(filePath,spriteTag, spriteSize, intialSpriteP
         enemyForwardFrames[i] = cc.SpriteFrame:createWithTexture(enemy_altas, 
             cc.rect((i-1)*spriteSize.width, 2*spriteSize.height, spriteSize.width, spriteSize.height))
     end
-    local enemy = cc.Sprite:createWithSpriteFrame(enemyForwardFrames[1])
+    s_frameCache:addSpriteFrame(enemyForwardFrames[1], tostring(spriteTag) .. "_stand")
+    s_frameCache:addSpriteFrame(enemyForwardFrames[2], tostring(spriteTag) .. "_jump")
+    local enemy = cc.Sprite:createWithSpriteFrame(enemyForwardFrames[1])  
     enemy:setFlippedX(true)
     enemy:setPosition(intialSpritePosi.x, intialSpritePosi.y)
     enemy:setTag(spriteTag)
