@@ -627,13 +627,13 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
         attack:setTag(TAG_ENEMY_ATTACK)
         local distance_y_abs = math.abs(leadingRole_y - enemy_y)
         cclog("dis x: %f, dis y: %f", distance_x_abs, distance_y_abs)
-        if distance_y_abs <=  ATTACK_Y_THRESHOLD then  -- vertical attack
+        if distance_y_abs <=  ATTACK_Y_THRESHOLD then  -- horizontal attack
             if distance_x >= 0 then
                 self:setUpAttackForSprite(enemy, attack, RIGHT) 
             else
                 self:setUpAttackForSprite(enemy, attack, LEFT) 
             end              
-        else
+        else -- vertical attack
 --            if enemy:getTag() == TAG_BOSS then
                 local distance_y = leadingRole_y - enemy_y
                 if distance_x_abs <= ATTACK_DISTANCE_X_FOR_UP then
@@ -748,5 +748,22 @@ function AnimationLayer:showConclusion(wordStr)
     label:runAction(scale)
     self:addChild(label)
 end
+
+function AnimationLayer:setBasicUI()
+    local function changeGameScene(tag, sender)
+        local sceneCls = require("MainMenuScene")
+        local newScene = sceneCls.create()
+        cc.Director:getInstance():replaceScene(newScene)
+    end
+    
+    local startGameButton = cc.MenuItemImage:create("ui/begin_game.png", "ui/begin_game.png")
+    startGameButton:registerScriptTapHandler(changeGameScene)
+    startGameButton:setPosition(self.visibleSize.width/2, self.visibleSize.height/2+20)
+    startGameButton:setScale(0.6)
+    
+end
+
+
+
 
 return AnimationLayer

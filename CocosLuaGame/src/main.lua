@@ -4,11 +4,12 @@ cc.FileUtils:getInstance():addSearchPath("res")
 
 -- CC_USE_DEPRECATED_API = true
 require "cocos.init"
+require("Helper")
 
 -- cclog
-local cclog = function(...)
-    print(string.format(...))
-end
+--local cclog = function(...)
+--    print(string.format(...))
+--end
 
 -- for CCLuaEngine traceback
 function __G__TRACKBACK__(msg)
@@ -56,9 +57,9 @@ local function main()
     
     --create scene 
 --    local scene = require("GameScene")
-    local scene = require("MainScene")
+--    local scene = require("MainScene")
+    local scene = require("MainMenuScene")
     local gameScene = scene.create()
-    gameScene:playBgMusic()
     
     if cc.Director:getInstance():getRunningScene() then
         cc.Director:getInstance():replaceScene(gameScene)

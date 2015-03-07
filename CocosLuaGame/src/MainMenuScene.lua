@@ -1,24 +1,21 @@
 -- create class MainScene
-local MainScene = class("MainScene",function()
---    return cc.Scene:create()
-    return cc.Scene:createWithPhysics()
+local MainMenuScene = class("MainMenuScene",function()
+    return cc.Scene:create()
 end)
 
 -- return instance of MainScene, conformed with C++ form
-function MainScene.create()
-    local scene = MainScene.new()
-    local AnimationLayer = require("AnimationLayer")
-    local layer = AnimationLayer.create()
+function MainMenuScene.create()
+    local scene = MainMenuScene.new()
+    local MainMenuLayer = require("MainMenuLayer")
+    local layer = MainMenuLayer.create()
     scene:addChild(layer)
     return scene
 end
 
 -- overwrite the ctor() in new(), used to create fields
-function MainScene:ctor()
+function MainMenuScene:ctor()
     self.visibleSize = cc.Director:getInstance():getVisibleSize()
     self.origin = cc.Director:getInstance():getVisibleOrigin()
 end
 
-return MainScene
-
-
+return MainMenuScene
