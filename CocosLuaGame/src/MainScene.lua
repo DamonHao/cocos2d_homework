@@ -10,6 +10,9 @@ function MainScene.create()
     local AnimationLayer = require("AnimationLayer")
     local layer = AnimationLayer.create()
     scene:addChild(layer)
+    
+    local UILayer = require("MainUILayer")
+    scene:addChild(UILayer.create())
     return scene
 end
 

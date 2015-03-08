@@ -457,8 +457,8 @@ function AnimationLayer:onEnter()
             if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
                 s_simpleAudioEngine:playEffect("audio/attack_hit.mp3", false)
                 self:removeChild(dynamicSprite, true)
---                local curBlood = self:changeBloodVolume(leadingRole, -10)
-                local curBlood = 100 --FIXME FOR TEST
+                local curBlood = self:changeBloodVolume(leadingRole, -10)
+--                local curBlood = 100 --FIXME FOR TEST
                 if curBlood <= 0 then
                     self:deathEffect(leadingRole)
                     self:showConclusion("Game Over !")
@@ -748,22 +748,5 @@ function AnimationLayer:showConclusion(wordStr)
     label:runAction(scale)
     self:addChild(label)
 end
-
-function AnimationLayer:setBasicUI()
-    local function changeGameScene(tag, sender)
-        local sceneCls = require("MainMenuScene")
-        local newScene = sceneCls.create()
-        cc.Director:getInstance():replaceScene(newScene)
-    end
-    
-    local startGameButton = cc.MenuItemImage:create("ui/begin_game.png", "ui/begin_game.png")
-    startGameButton:registerScriptTapHandler(changeGameScene)
-    startGameButton:setPosition(self.visibleSize.width/2, self.visibleSize.height/2+20)
-    startGameButton:setScale(0.6)
-    
-end
-
-
-
 
 return AnimationLayer

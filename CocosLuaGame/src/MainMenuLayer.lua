@@ -21,6 +21,13 @@ end
 
 
 function MainMenuLayer:onEnter()
+    
+    local mapBackground = cc.Sprite:create("maps/map_background.png")
+    local SCALE_FACTOR = 0.7
+    mapBackground:setScale(SCALE_FACTOR, SCALE_FACTOR)
+    mapBackground:setPosition(self.visibleSize.width/2, self.visibleSize.height/2-30) 
+    self:addChild(mapBackground, -10)
+
     local function changeGameScene(tag, sender)
         local sceneCls = require("MainScene")
         local newScene = sceneCls.create()
