@@ -84,6 +84,7 @@ function AnimationLayer:ctor()
     self.isLeadingRoleOnTheGround = true
     self.bloodVolumeTable = {}
     self.enemyArray = {}
+    self.hasBossSplited = false
     self.curEnemyNum = 2
 end
 
@@ -160,7 +161,6 @@ function AnimationLayer:onEnter()
         
     
     local leadingRole = cc.Sprite:createWithSpriteFrame(forwardFrames[1])
---    leadingRole:setScale(0.8, 0.8)  
     leadingRole:setPosition(self.visibleSize.width/5, leadingRole:getContentSize().height/2+ 15)
     leadingRole:setPhysicsBody(cc.PhysicsBody:createBox(cc.size(
                 leadingRole:getContentSize().width-15,leadingRole:getContentSize().height)))
@@ -186,17 +186,6 @@ function AnimationLayer:onEnter()
     self:addLeadingRole(leadingRole)
     self:addEnemy(boss)
     self:addEnemy(doughboy)
-    
-    -- Simple AI
---    s_enemySimpleAI = function ()  --FIXME Simple AI
---        -- set if condition in case it will pause the action that delete the sprite
---        if self:getBloodVolumeInfo(boss).curBlood > 0 then
---            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
---        end
---        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
---            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
---        end
---    end
     
     -- keyboard event
     local function onKeyPressed(keyCode, event)
@@ -341,7 +330,7 @@ function AnimationLayer:onEnter()
         local a = contact:getShapeA():getBody():getNode()
         local b = contact:getShapeB():getBody():getNode()
         cclog("contact in a tag: %d, b tag: %d", a:getTag(), b:getTag()) 
-        if s_isMap[a:getTag()] or s_isMap[b:getTag()] then
+        if s_isMap[a:getTag()] or s_isMap[b:getTag()] then -- with map
             local map, dynamicSprite
             local isSwapped = false
             if s_isMap[a:getTag()] then
@@ -419,7 +408,7 @@ function AnimationLayer:onEnter()
                     dynamicSpriteBody:setVelocity(cc.p(0, velocity.y))
                 end
             end
-        elseif s_isEnemy[a:getTag()] or s_isEnemy[b:getTag()] then
+        elseif s_isEnemy[a:getTag()] or s_isEnemy[b:getTag()] then -- with enemy
             local enemy, dynamicSprite
             if s_isEnemy[a:getTag()] then
                 enemy = a 
@@ -428,17 +417,30 @@ function AnimationLayer:onEnter()
                 enemy = b 
                 dynamicSprite = a
             end
-            if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then
+            if dynamicSprite:getTag() == TAG_LEADING_ROLE_ATTACK then --FIXME CURRENT
                 s_simpleAudioEngine:playEffect("audio/attack_hit.mp3", false)
                 self:removeChild(dynamicSprite, true)
                 local curBlood = 0
                 if enemy:getTag() == TAG_BOSS then
                     curBlood = self:changeBloodVolume(enemy, -10)
+                    if (not self.hasBossSplited) and curBlood <= 50 then -- add a new boss
+                        self.hasBossSplited = true
+                        curBlood = self:changeBloodVolume(enemy, 100-curBlood)
+                        local randomNum = math.random(80, 280)
+                        local boss = self:setUpEnemy("roles/boss_atlas.png", TAG_BOSS,
+                            {width=55, height=75},{x=randomNum , y= 50})
+                        self:addEnemy(boss)
+                    end
                 elseif  enemy:getTag() == TAG_DOUGHBOY then 
                     curBlood = self:changeBloodVolume(enemy, -15) 
                 end
                 if curBlood <= 0 then --FIXME add end event
-                    self:deathEffect(enemy)
+                    if enemy:getTag() == TAG_BOSS then
+                        self:deathEffect(enemy)
+                        self:deathEffectWithSpriteTag(TAG_BOSS)
+                    else
+                        self:deathEffect(enemy)
+                    end
                     if self.curEnemyNum > 1 then
                         self.curEnemyNum = self.curEnemyNum - 1
                     else -- win!
@@ -711,6 +713,17 @@ function AnimationLayer:deathEffect(targetSprite)
     local sequence = cc.Sequence:create(action1, callfunc)
     targetSprite:runAction(sequence)  
 end
+
+function AnimationLayer:deathEffectWithSpriteTag(spriteTag)
+    for i = 1, #(self.enemyArray) do
+        local curEnemy = self.enemyArray[i]
+        if self:getBloodVolumeInfo(curEnemy).curBlood > 0 and curEnemy:getTag() == spriteTag then
+            self:changeBloodVolume(curEnemy, -100)
+            self:deathEffect(curEnemy)
+        end
+    end
+end
+
 
 function AnimationLayer:setUpEnemy(filePath,spriteTag, spriteSize, intialSpritePosi)
     local enemy_altas = cc.Sprite:create(filePath):getTexture()
