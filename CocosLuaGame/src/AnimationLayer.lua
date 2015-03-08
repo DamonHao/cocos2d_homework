@@ -1,3 +1,4 @@
+-- tags
 local TAG_FORWARD_ACTION = 1
 local TAG_BACKWARD_ACTION = 2
 local TAG_JUMP_FORWARD_ACTION = 3
@@ -13,6 +14,7 @@ local TAG_MAP_STONE = 109
 local s_isEnemy = {[TAG_BOSS]=true, [TAG_DOUGHBOY]=true}
 local s_isMap = {[TAG_MAP] = true, [TAG_MAP_STONE] = true}
 
+-- sprite action
 local KEY_UP = cc.KeyCode.KEY_W
 local KEY_RIGHT = cc.KeyCode.KEY_D
 local KEY_DOWN = cc.KeyCode.KEY_S
@@ -37,12 +39,19 @@ local LEFT_DOWN = 6
 local LEFT_UP = 7
 local RIGHT_UP = 8
 
--- 
+-- enemy AI
 local s_scheduler = cc.Director:getInstance():getScheduler()
 local s_schedulerEntry1 = nil
 local ATTACK_DISTANCE_X = 170
 local ATTACK_DISTANCE_X_FOR_UP = 50
 local ENEMY_JUMP_THRESHOLD = 4
+
+-- blood
+local BOOS_SPLIT_BLOOD_THRESHOLD = 30
+local ATTACKED_BLOOD_REDUCE_LEADING_ROLE = -8
+local ATTACKED_BLOOD_REDUCE_BOSS  = -10
+local ATTACKED_BLOOD_REDUCE_DOUGHBOY = -15
+
 
 local s_simpleAudioEngine = cc.SimpleAudioEngine:getInstance()
 -- cache sprite frame
@@ -86,6 +95,7 @@ function AnimationLayer:ctor()
     self.enemyArray = {}
     self.hasBossSplited = false
     self.curEnemyNum = 2
+    self.isGameEnd = false
 end
 
 function AnimationLayer:onEnter()
@@ -422,8 +432,8 @@ function AnimationLayer:onEnter()
                 self:removeChild(dynamicSprite, true)
                 local curBlood = 0
                 if enemy:getTag() == TAG_BOSS then
-                    curBlood = self:changeBloodVolume(enemy, -10)
-                    if (not self.hasBossSplited) and curBlood <= 50 then -- add a new boss
+                    curBlood = self:changeBloodVolume(enemy, ATTACKED_BLOOD_REDUCE_BOSS)
+                    if (not self.hasBossSplited) and curBlood <= BOOS_SPLIT_BLOOD_THRESHOLD then -- add a new boss
                         self.hasBossSplited = true
                         curBlood = self:changeBloodVolume(enemy, 100-curBlood)
                         local randomNum = math.random(80, 280)
@@ -432,18 +442,19 @@ function AnimationLayer:onEnter()
                         self:addEnemy(boss)
                     end
                 elseif  enemy:getTag() == TAG_DOUGHBOY then 
-                    curBlood = self:changeBloodVolume(enemy, -15) 
+                    curBlood = self:changeBloodVolume(enemy, ATTACKED_BLOOD_REDUCE_DOUGHBOY) 
                 end
                 if curBlood <= 0 then --FIXME add end event
                     if enemy:getTag() == TAG_BOSS then
-                        self:deathEffect(enemy)
-                        self:deathEffectWithSpriteTag(TAG_BOSS)
+                        self:removeWithDeathEffect(enemy)
+                        self:removeWithDeathEffectBySpriteTag(TAG_BOSS)
                     else
-                        self:deathEffect(enemy)
+                        self:removeWithDeathEffect(enemy)
                     end
                     if self.curEnemyNum > 1 then
                         self.curEnemyNum = self.curEnemyNum - 1
-                    else -- win!
+                    elseif self.isGameEnd == false then -- win!
+                        self.isGameEnd = true
                         self:showConclusion("Win !")
                         s_simpleAudioEngine:stopMusic()
                         s_simpleAudioEngine:playEffect("audio/game_win.mp3", false)
@@ -465,10 +476,11 @@ function AnimationLayer:onEnter()
             if dynamicSprite:getTag() == TAG_ENEMY_ATTACK then
                 s_simpleAudioEngine:playEffect("audio/attack_hit.mp3", false)
                 self:removeChild(dynamicSprite, true)
-                local curBlood = self:changeBloodVolume(leadingRole, -10)
+                local curBlood = self:changeBloodVolume(leadingRole, ATTACKED_BLOOD_REDUCE_LEADING_ROLE)
 --                local curBlood = 100 --FIXME FOR TEST
-                if curBlood <= 0 then
-                    self:deathEffect(leadingRole)
+                if curBlood <= 0 and self.isGameEnd == false then
+                    self.isGameEnd = true
+                    self:removeWithDeathEffect(leadingRole)
                     self:showConclusion("Game Over !")
                     -- remove enemy AI timer
                     s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
@@ -702,8 +714,10 @@ function AnimationLayer:changeBloodVolume(targetSprite, delta)
     return bloodVolumeInfo.curBlood
 end
 
-function AnimationLayer:deathEffect(targetSprite)
-    targetSprite:getPhysicsBody():setContactTestBitmask(1)
+function AnimationLayer:removeWithDeathEffect(targetSprite)
+    -- when targetSprite is dead, it should contact with nothing
+    targetSprite:getPhysicsBody():setContactTestBitmask(0)
+--    targetSprite:getPhysicsBody():setContactTestBitmask(1)
     targetSprite:stopAllActions()
     local action1 = cc.Blink:create(1, 3)
     local function deleteSprite()
@@ -714,12 +728,12 @@ function AnimationLayer:deathEffect(targetSprite)
     targetSprite:runAction(sequence)  
 end
 
-function AnimationLayer:deathEffectWithSpriteTag(spriteTag)
+function AnimationLayer:removeWithDeathEffectBySpriteTag(spriteTag)
     for i = 1, #(self.enemyArray) do
         local curEnemy = self.enemyArray[i]
         if self:getBloodVolumeInfo(curEnemy).curBlood > 0 and curEnemy:getTag() == spriteTag then
             self:changeBloodVolume(curEnemy, -100)
-            self:deathEffect(curEnemy)
+            self:removeWithDeathEffect(curEnemy)
         end
     end
 end
