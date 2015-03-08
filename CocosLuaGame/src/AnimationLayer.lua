@@ -40,7 +40,6 @@ local RIGHT_UP = 8
 -- 
 local s_scheduler = cc.Director:getInstance():getScheduler()
 local s_schedulerEntry1 = nil
-local s_enemySimpleAI = nil
 local ATTACK_DISTANCE_X = 170
 local ATTACK_DISTANCE_X_FOR_UP = 50
 local ENEMY_JUMP_THRESHOLD = 4
@@ -63,7 +62,10 @@ function AnimationLayer.create()
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
         if event == "enter" then
             layer:onEnter()
-            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(s_enemySimpleAI, 2, false)
+            local function timerCallBack()
+                layer:enemySimpleAI()  
+            end
+            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(timerCallBack, 2, false)
         elseif event == "exit" then
             s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
         end
@@ -81,6 +83,7 @@ function AnimationLayer:ctor()
     self.directionKeyNum = 0
     self.isLeadingRoleOnTheGround = true
     self.bloodVolumeTable = {}
+    self.enemyArray = {}
     self.curEnemyNum = 2
 end
 
@@ -180,17 +183,20 @@ function AnimationLayer:onEnter()
     local doughboy = self:setUpEnemy("roles/doughboy_atlas.png", TAG_DOUGHBOY, 
         {width=55, height=77},{x=self.visibleSize.width*5/7, y= 50})
     
+    self:addLeadingRole(leadingRole)
+    self:addEnemy(boss)
+    self:addEnemy(doughboy)
     
     -- Simple AI
-    s_enemySimpleAI = function ()  --FIXME Simple AI
-        -- set if condition in case it will pause the action that delete the sprite
-        if self:getBloodVolumeInfo(boss).curBlood > 0 then
-            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
-        end
-        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
-            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
-        end
-    end
+--    s_enemySimpleAI = function ()  --FIXME Simple AI
+--        -- set if condition in case it will pause the action that delete the sprite
+--        if self:getBloodVolumeInfo(boss).curBlood > 0 then
+--            self:executeAIForEnemy(boss, leadingRole, "boss_attack")
+--        end
+--        if self:getBloodVolumeInfo(doughboy).curBlood > 0 then
+--            self:executeAIForEnemy(doughboy, leadingRole, "enemy_attack")
+--        end
+--    end
     
     -- keyboard event
     local function onKeyPressed(keyCode, event)
@@ -695,7 +701,6 @@ function AnimationLayer:changeBloodVolume(targetSprite, delta)
 end
 
 function AnimationLayer:deathEffect(targetSprite)
---    targetSprite:getPhysicsBody():setDynamic(false)
     targetSprite:getPhysicsBody():setContactTestBitmask(1)
     targetSprite:stopAllActions()
     local action1 = cc.Blink:create(1, 3)
@@ -747,6 +752,29 @@ function AnimationLayer:showConclusion(wordStr)
     local scale = cc.ScaleBy:create(2, 1.5)
     label:runAction(scale)
     self:addChild(label)
+end
+
+function AnimationLayer:addEnemy(enemy)
+    self.enemyArray[#(self.enemyArray)+1] = enemy
+end
+
+function AnimationLayer:addLeadingRole(leadingRole)
+    self.leadingRole = leadingRole
+end
+
+
+function AnimationLayer:enemySimpleAI() --FIXME CURRENT
+    for i = 1, #(self.enemyArray) do
+        local curEnemy = self.enemyArray[i]
+        -- set if condition in case it will pause the action that delete the sprite
+        if self:getBloodVolumeInfo(curEnemy).curBlood > 0 then
+            if curEnemy:getTag() == TAG_BOSS then
+                self:executeAIForEnemy(curEnemy, self.leadingRole, "boss_attack")
+            else
+                self:executeAIForEnemy(curEnemy, self.leadingRole, "enemy_attack")
+            end
+        end
+    end
 end
 
 return AnimationLayer
