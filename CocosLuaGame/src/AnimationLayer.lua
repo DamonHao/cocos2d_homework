@@ -42,6 +42,7 @@ local RIGHT_UP = 8
 -- enemy AI
 local s_scheduler = cc.Director:getInstance():getScheduler()
 local s_schedulerEntry1 = nil
+local SCHEDULER_TIME_INTERVAL = 2
 local ATTACK_DISTANCE_X = 170
 local ATTACK_DISTANCE_X_FOR_UP = 50
 local ENEMY_JUMP_THRESHOLD = 4
@@ -74,7 +75,7 @@ function AnimationLayer.create()
             local function timerCallBack()
                 layer:enemySimpleAI()  
             end
-            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(timerCallBack, 2, false)
+            s_schedulerEntry1 = s_scheduler:scheduleScriptFunc(timerCallBack, SCHEDULER_TIME_INTERVAL, false)
         elseif event == "exit" then
             s_scheduler:unscheduleScriptEntry(s_schedulerEntry1)
         end

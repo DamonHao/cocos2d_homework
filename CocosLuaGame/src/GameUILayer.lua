@@ -1,12 +1,12 @@
 local s_simpleAudioEngine = cc.SimpleAudioEngine:getInstance()
 
 
-local MainUILayer = class("MainUILayer", function()
+local GameUILayer = class("GameUILayer", function()
     return cc.Layer:create()
 end)
 
-function MainUILayer.create()
-    local layer = MainUILayer.new()
+function GameUILayer.create()
+    local layer = GameUILayer.new()
     local function onNodeEvent(event) -- onEnter() and onExit() is node event 
         if event == "enter" then
             layer:onEnter()
@@ -17,12 +17,12 @@ function MainUILayer.create()
     return layer
 end
 
-function MainUILayer:ctor()
+function GameUILayer:ctor()
     self.visibleSize = cc.Director:getInstance():getVisibleSize()
 end
 
 
-function MainUILayer:onEnter()
+function GameUILayer:onEnter()
     local function changeGameScene(tag, sender)
         s_simpleAudioEngine:stopMusic()
         s_simpleAudioEngine:stopAllEffects()
@@ -42,4 +42,4 @@ function MainUILayer:onEnter()
     self:addChild(menu)
 end
 
-return MainUILayer
+return GameUILayer

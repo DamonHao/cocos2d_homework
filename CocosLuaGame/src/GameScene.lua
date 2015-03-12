@@ -1,27 +1,27 @@
 -- create class MainScene
-local MainScene = class("MainScene",function()
+local GameScene = class("GameScene",function()
 --    return cc.Scene:create()
     return cc.Scene:createWithPhysics()
 end)
 
--- return instance of MainScene, conformed with C++ form
-function MainScene.create()
-    local scene = MainScene.new()
+-- return instance of GameScene, conformed with C++ form
+function GameScene.create()
+    local scene = GameScene.new()
     local AnimationLayer = require("AnimationLayer")
     local layer = AnimationLayer.create()
     scene:addChild(layer)
     
-    local UILayer = require("MainUILayer")
+    local UILayer = require("GameUILayer")
     scene:addChild(UILayer.create())
     return scene
 end
 
 -- overwrite the ctor() in new(), used to create fields
-function MainScene:ctor()
+function GameScene:ctor()
     self.visibleSize = cc.Director:getInstance():getVisibleSize()
     self.origin = cc.Director:getInstance():getVisibleOrigin()
 end
 
-return MainScene
+return GameScene
 
 

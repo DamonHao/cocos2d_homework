@@ -29,7 +29,7 @@ function MainMenuLayer:onEnter()
     self:addChild(mapBackground, -10)
 
     local function changeGameScene(tag, sender)
-        local sceneCls = require("MainScene")
+        local sceneCls = require("GameScene")
         local newScene = sceneCls.create()
         cc.Director:getInstance():replaceScene(newScene)
     end
