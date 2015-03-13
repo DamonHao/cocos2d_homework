@@ -27,7 +27,7 @@ local JUMP_UP_SPEED = 360
 local WALK_SPEED = 70
 local ATTACK_SPEED = 110
 local ALL_BIT_ONE = -1 -- 0xFFFFFFFF will overflow and set as -2147483648 = 0x80000000
-local ATTACK_Y_THRESHOLD = 50
+
 
 -- control direction
 local RIGHT = 1
@@ -44,7 +44,8 @@ local s_scheduler = cc.Director:getInstance():getScheduler()
 local s_schedulerEntry1 = nil
 local SCHEDULER_TIME_INTERVAL = 2
 local ATTACK_DISTANCE_X = 170
-local ATTACK_DISTANCE_X_FOR_UP = 50
+local ATTACK_Y_THRESHOLD = 50
+local ATTACK_X_THRESHOLD = 50
 local ENEMY_JUMP_THRESHOLD = 4
 
 -- blood
@@ -657,7 +658,7 @@ function AnimationLayer:executeAIForEnemy(enemy, leadingRole, attackSpriteFrameN
         else -- vertical attack
 --            if enemy:getTag() == TAG_BOSS then
                 local distance_y = leadingRole_y - enemy_y
-                if distance_x_abs <= ATTACK_DISTANCE_X_FOR_UP then
+                if distance_x_abs <= ATTACK_X_THRESHOLD then
                     if distance_y > 0 then
                         self:setUpAttackForSprite(enemy, attack, UP)
                     else
